@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="1100" viewBox="0 0 900 1100" preserveAspectRatio="xMidYMid slice">
+  <defs>
+    <radialGradient id="sheenD" cx="30%" cy="14%" r="105%">
+      <stop offset="0%" stop-color="#18634d"></stop>
+      <stop offset="55%" stop-color="#0f4a3a"></stop>
+      <stop offset="100%" stop-color="#093528"></stop>
+    </radialGradient>
+    <linearGradient id="goldD" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#cdb787" stop-opacity="0"></stop>
+      <stop offset="72%" stop-color="#cdb787" stop-opacity="0"></stop>
+      <stop offset="100%" stop-color="#cdb787" stop-opacity="0.26"></stop>
+    </linearGradient>
+
+    <filter id="veinsD" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.0022 0.0085" numOctaves="3" seed="22" stitchTiles="stitch" result="n"></feTurbulence>
+      <feColorMatrix in="n" type="luminanceToAlpha" result="lum"></feColorMatrix>
+      <feComponentTransfer in="lum" result="band">
+        <feFuncA type="table" tableValues="0 0 0 .15 .9 .15 0 0 0"></feFuncA>
+      </feComponentTransfer>
+      <feFlood flood-color="#c7b07a" result="vcol"></feFlood>
+      <feComposite in="vcol" in2="band" operator="in" result="veins"></feComposite>
+      <feGaussianBlur in="veins" stdDeviation="0.7"></feGaussianBlur>
+    </filter>
+
+    <filter id="veins2D" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="0.0014 0.0032" numOctaves="2" seed="5" stitchTiles="stitch" result="n"></feTurbulence>
+      <feColorMatrix in="n" type="luminanceToAlpha" result="lum"></feColorMatrix>
+      <feComponentTransfer in="lum" result="band">
+        <feFuncA type="table" tableValues="0 .12 .38 .12 0"></feFuncA>
+      </feComponentTransfer>
+      <feFlood flood-color="#1f7659" result="vcol"></feFlood>
+      <feComposite in="vcol" in2="band" operator="in" result="veins"></feComposite>
+      <feGaussianBlur in="veins" stdDeviation="4.5"></feGaussianBlur>
+    </filter>
+  </defs>
+
+  <rect width="900" height="1100" fill="url(#sheenD)"></rect>
+  <rect width="900" height="1100" filter="url(#veins2D)" opacity="0.5"></rect>
+  <rect width="900" height="1100" filter="url(#veinsD)" opacity="0.34"></rect>
+  <rect width="900" height="1100" fill="url(#goldD)"></rect>
+</svg>
