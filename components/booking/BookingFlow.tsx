@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
-import { PROFESSIONALS, fmtPrice } from '@/lib/data';
 import type { Professional } from '@/lib/types';
 
 const SERVICE = {
@@ -298,7 +297,7 @@ interface BookingFlowProps {
 
 export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
   const [step, setStep] = useState(1);
-  const professional = PROFESSIONALS[0];
+  const professional: Professional = { id: 'p1', name: 'Dra. Valentina Calvo', title: 'Médica', initials: 'VC', bio: null };
   const [datetime, setDatetime] = useState<{ day: Day; time: string } | null>(null);
   const [sending, setSending] = useState(false);
 
