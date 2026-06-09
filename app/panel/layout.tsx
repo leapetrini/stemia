@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
+import { supabase } from '@/lib/supabase';
 import { Icon, Mark } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
+import type { Session } from '@supabase/supabase-js';
 
 const TABS = [
   { id: 'dashboard', label: 'Inicio', icon: 'home', href: '/panel' },
@@ -13,7 +15,7 @@ const TABS = [
   { id: 'insumos', label: 'Insumos', icon: 'box', href: '/panel/insumos' },
 ];
 
-function Sidebar({ active }: { active: string }) {
+function Sidebar({ active, onLogout }: { active: string; onLogout: () => void }) {
   const router = useRouter();
   return (
     <aside className="sidebar">
@@ -38,7 +40,7 @@ function Sidebar({ active }: { active: string }) {
           <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>Dra. V. Calvo</div>
           <div style={{ fontSize: 12, color: 'var(--faint)' }}>Administradora</div>
         </div>
-        <button className="sidebar__logout" onClick={() => router.push('/')}>
+        <button className="sidebar__logout" onClick={onLogout} title="Cerrar sesión">
           <Icon name="logout" size={16} />
         </button>
       </div>
@@ -66,12 +68,50 @@ function TabBar({ active }: { active: string }) {
 
 export default function PanelLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+
+  const isLogin = pathname === '/panel/login';
+
+  useEffect(() => {
+    if (isLogin) return;
+
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      if (!data.session) router.replace('/panel/login');
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, s) => {
+      setSession(s);
+      if (!s) router.replace('/panel/login');
+    });
+
+    return () => subscription.unsubscribe();
+  }, [isLogin, router]);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/panel/login');
+  };
+
+  // Login page — sin sidebar ni autenticación
+  if (isLogin) return <>{children}</>;
+
+  // Verificando sesión
+  if (session === undefined || session === null) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
+        <div style={{ fontSize: 13, color: 'var(--faint)' }}>Cargando…</div>
+      </div>
+    );
+  }
+
   const active = TABS.find(t => t.href === pathname)?.id ?? 'dashboard';
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
       <div className="shell" style={{ height: '100%' }}>
-        <Sidebar active={active} />
+        <Sidebar active={active} onLogout={handleLogout} />
         <div className="shell__main">
           <div className="shell__scroll">
             {children}

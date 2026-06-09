@@ -5,17 +5,9 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
+import { PatientModal, type PatientData } from '@/components/panel/PatientModal';
 
-type PatientRow = {
-  id: string;
-  name: string;
-  age: number | null;
-  phone: string | null;
-  email: string | null;
-  skin_type: string | null;
-  tags: string[] | null;
-  alerts: string[] | null;
-};
+type PatientRow = PatientData;
 
 export default function PacientesPage() {
   const router = useRouter();
@@ -23,6 +15,7 @@ export default function PacientesPage() {
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showNew, setShowNew] = useState(false);
 
   useEffect(() => {
     supabase
@@ -50,7 +43,7 @@ export default function PacientesPage() {
             <h1 className="scrhead__title">Pacientes</h1>
             <p className="scrhead__sub">{loading ? '…' : `${patients.length} registrados`}</p>
           </div>
-          <button className="btn btn--gold btn--sm">
+          <button className="btn btn--gold btn--sm" onClick={() => setShowNew(true)}>
             <Icon name="plus" size={15} color="#fff" /> Nuevo
           </button>
         </div>
@@ -115,5 +108,16 @@ export default function PacientesPage() {
         )}
       </div>
     </div>
+
+    {showNew && (
+      <PatientModal
+        onSave={newPatient => {
+          setPatients(prev => [...prev, newPatient].sort((a, b) => a.name.localeCompare(b.name)));
+          setShowNew(false);
+          router.push(`/panel/pacientes/${newPatient.id}`);
+        }}
+        onClose={() => setShowNew(false)}
+      />
+    )}
   );
 }

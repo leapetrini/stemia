@@ -5,18 +5,9 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
+import { PatientModal, type PatientData } from '@/components/panel/PatientModal';
 
-type Patient = {
-  id: string;
-  name: string;
-  age: number | null;
-  phone: string | null;
-  email: string | null;
-  skin_type: string | null;
-  tags: string[] | null;
-  alerts: string[] | null;
-  created_at: string;
-};
+type Patient = PatientData;
 
 type Appointment = {
   id: string;
@@ -48,6 +39,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<'info' | 'historial' | 'consentimiento'>('info');
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -89,12 +81,17 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
     <div className="page scr-anim">
       {/* HEADER */}
       <div className="scrhead">
-        <button
-          onClick={() => router.back()}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 12px', display: 'flex', alignItems: 'center', gap: 4, color: 'var(--muted)', fontSize: 13 }}
-        >
-          <Icon name="chevL" size={14} color="var(--muted)" /> Pacientes
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12 }}>
+          <button
+            onClick={() => router.back()}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--muted)', fontSize: 13 }}
+          >
+            <Icon name="chevL" size={14} color="var(--muted)" /> Pacientes
+          </button>
+          <button className="btn btn--outline btn--sm" onClick={() => setEditing(true)}>
+            <Icon name="edit" size={14} color="var(--emerald)" /> Editar
+          </button>
+        </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <Avatar initials={initials} tone="gold" size={52} />
@@ -332,5 +329,13 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
         )}
       </div>
     </div>
+
+    {editing && patient && (
+      <PatientModal
+        patient={patient}
+        onSave={updated => { setPatient(updated); setEditing(false); }}
+        onClose={() => setEditing(false)}
+      />
+    )}
   );
 }
