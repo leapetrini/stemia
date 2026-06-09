@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
@@ -41,7 +41,8 @@ function toLocalISO(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
-export default function PatientDetailPage({ params }: { params: { id: string } }) {
+export default function PatientDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const router = useRouter();
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -50,18 +51,18 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
 
   useEffect(() => {
     Promise.all([
-      supabase.from('patients').select('*').eq('id', params.id).single(),
+      supabase.from('patients').select('*').eq('id', id).single(),
       supabase
         .from('appointments')
         .select('id, date, time, duration_min, status, service:services(name)')
-        .eq('patient_id', params.id)
+        .eq('patient_id', id)
         .order('date', { ascending: false }),
     ]).then(([patRes, apptRes]) => {
       setPatient(patRes.data as Patient);
       setAppointments((apptRes.data as unknown as Appointment[]) ?? []);
       setLoading(false);
     });
-  }, [params.id]);
+  }, [id]);
 
   if (loading) {
     return (
