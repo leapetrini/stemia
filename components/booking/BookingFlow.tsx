@@ -241,15 +241,15 @@ function BookingConfirmation({ professional, day, time, sending, onConfirm }: {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
         <div className="field">
           <label className="field__label">Nombre y apellido</label>
-          <input className="input" placeholder="Ej. María González" value={name} onChange={e => setName(e.target.value)} />
+          <input className="input" placeholder="Ej. María González" autoComplete="name" value={name} onChange={e => setName(e.target.value)} />
         </div>
         <div className="field">
           <label className="field__label">Email</label>
-          <input className="input" type="email" placeholder="tu@email.com" value={email} onChange={e => setEmail(e.target.value)} />
+          <input className="input" type="email" placeholder="tu@email.com" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} />
         </div>
         <div className="field">
           <label className="field__label">Teléfono</label>
-          <input className="input" type="tel" placeholder="+54 9 11 0000 0000" value={phone} onChange={e => setPhone(e.target.value)} />
+          <input className="input" type="tel" placeholder="+54 9 11 0000 0000" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} />
         </div>
       </div>
 
