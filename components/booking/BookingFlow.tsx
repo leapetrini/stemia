@@ -194,11 +194,12 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
 }
 
 // ── Confirmation ────────────────────────────────────────────────
-function BookingConfirmation({ professional, day, time, sending, onConfirm }: {
+function BookingConfirmation({ professional, day, time, sending, error, onConfirm }: {
   professional: Professional;
   day: Day;
   time: string;
   sending: boolean;
+  error: string | null;
   onConfirm: (name: string, email: string, phone: string) => void;
 }) {
   const [name, setName] = useState('');
@@ -253,6 +254,11 @@ function BookingConfirmation({ professional, day, time, sending, onConfirm }: {
         </div>
       </div>
 
+      {error && (
+        <div style={{ padding: '12px 14px', borderRadius: 'var(--r-sm)', background: 'rgba(180,83,63,.08)', border: '1px solid rgba(180,83,63,.2)', color: 'var(--danger)', fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
+          {error}
+        </div>
+      )}
       <button className="btn btn--primary btn--lg btn--block"
         disabled={!canSubmit}
         style={{ opacity: canSubmit ? 1 : .38 }}
@@ -300,17 +306,27 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
   const professional: Professional = { id: 'p1', name: 'Dra. Valentina Calvo', title: 'Médica', initials: 'VC', bio: null };
   const [datetime, setDatetime] = useState<{ day: Day; time: string } | null>(null);
   const [sending, setSending] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   const onConfirm = async (name: string, email: string, phone: string) => {
     setSending(true);
+    setBookingError(null);
     try {
-      await fetch('/api/booking', {
+      const res = await fetch('/api/booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, phone, day: datetime?.day, time: datetime?.time }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSending(false);
+        setBookingError(data.error ?? 'Ocurrió un error. Por favor intentá de nuevo.');
+        return;
+      }
     } catch (_) {
-      // email failure is non-blocking — we still confirm the booking
+      setSending(false);
+      setBookingError('No se pudo conectar. Verificá tu conexión e intentá de nuevo.');
+      return;
     }
     setSending(false);
     setStep(3);
@@ -347,6 +363,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
             day={datetime.day}
             time={datetime.time}
             sending={sending}
+            error={bookingError}
             onConfirm={onConfirm}
           />
         )}
