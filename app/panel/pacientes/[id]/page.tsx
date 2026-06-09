@@ -78,6 +78,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const handlePrint = () => window.print();
 
   return (
+    <>
     <div className="page scr-anim">
       {/* HEADER */}
       <div className="scrhead">
@@ -337,5 +338,6 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
         onClose={() => setEditing(false)}
       />
     )}
+    </>
   );
 }

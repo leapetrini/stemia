@@ -36,6 +36,7 @@ export default function PacientesPage() {
   );
 
   return (
+    <>
     <div className="page scr-anim">
       <div className="scrhead">
         <div className="scrhead__row">
@@ -119,5 +120,6 @@ export default function PacientesPage() {
         onClose={() => setShowNew(false)}
       />
     )}
+    </>
   );
 }
