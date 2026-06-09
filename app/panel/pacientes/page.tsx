@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
@@ -17,6 +18,7 @@ type PatientRow = {
 };
 
 export default function PacientesPage() {
+  const router = useRouter();
   const [q, setQ] = useState('');
   const [patients, setPatients] = useState<PatientRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +86,7 @@ export default function PacientesPage() {
         {!loading && !error && filtered.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--line)', borderRadius: 'var(--r-lg)', overflow: 'hidden', border: '1px solid var(--line)' }}>
             {filtered.map(p => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'var(--surface)', cursor: 'pointer' }}>
+              <div key={p.id} onClick={() => router.push(`/panel/pacientes/${p.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'var(--surface)', cursor: 'pointer' }}>
                 <Avatar
                   initials={p.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
                   tone="gold"

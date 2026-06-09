@@ -46,6 +46,7 @@ const PATHS: Record<string, string> = {
   flask: 'M9 3h6M10 3v6L5.5 18a1.5 1.5 0 0 0 1.4 2.2h10.2A1.5 1.5 0 0 0 18.5 18L14 9V3M8 14h8',
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   image: 'M4.5 4.5h15v15h-15zM4.5 16l4-4 3 3 4-5 4 5M9 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z',
+  printer: 'M6 9V3.5h12V9M6 18H4.5A1.5 1.5 0 0 1 3 16.5v-5A1.5 1.5 0 0 1 4.5 10h15a1.5 1.5 0 0 1 1.5 1.5v5a1.5 1.5 0 0 1-1.5 1.5H18M6 13.5h12V21H6Z',
 };
 
 interface IconProps {
