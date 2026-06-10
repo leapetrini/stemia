@@ -26,15 +26,16 @@ type NewAppointment = {
 
 interface Props {
   date: string;
+  defaultSlot?: string;
   onSave: (appt: NewAppointment) => void;
   onClose: () => void;
 }
 
-export function NewAppointmentModal({ date, onSave, onClose }: Props) {
+export function NewAppointmentModal({ date, defaultSlot, onSave, onClose }: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Patient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(defaultSlot ?? null);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);

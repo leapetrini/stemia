@@ -7,6 +7,12 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { NewAppointmentModal } from '@/components/panel/NewAppointmentModal';
 
+const ALL_SLOTS = [
+  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
+  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
+  '16:00', '16:30',
+];
+
 type AppointmentRow = {
   id: string;
   time: string;
@@ -53,36 +59,35 @@ export default function AgendaPage() {
   const [selectedDate, setSelectedDate] = useState(toISO(new Date()));
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
+  const [newDefaultSlot, setNewDefaultSlot] = useState<string | undefined>(undefined);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
   const fetchAppointments = (date: string) => {
     setLoading(true);
-    setError(null);
     supabase
       .from('appointments')
       .select('id, time, duration_min, status, notes, deposit_paid, patient:patients(id, name, phone), service:services(id, name)')
       .eq('date', date)
       .order('time')
-      .then(({ data, error: err }) => {
-        if (err) setError(err.message);
-        else setAppointments((data as unknown as AppointmentRow[]) ?? []);
+      .then(({ data }) => {
+        setAppointments((data as unknown as AppointmentRow[]) ?? []);
         setLoading(false);
       });
   };
 
-  useEffect(() => {
-    fetchAppointments(selectedDate);
-  }, [selectedDate]);
+  useEffect(() => { fetchAppointments(selectedDate); }, [selectedDate]);
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     setUpdatingId(id);
-    const { error: err } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id);
-    if (!err) {
-      setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
-    }
+    const { error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id);
+    if (!error) setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
     setUpdatingId(null);
+  };
+
+  const openNew = (slot?: string) => {
+    setNewDefaultSlot(slot);
+    setShowNew(true);
   };
 
   const days = Array.from({ length: 7 }, (_, i) => {
@@ -103,7 +108,7 @@ export default function AgendaPage() {
             <h1 className="scrhead__title">Agenda</h1>
             <p className="scrhead__sub" style={{ textTransform: 'capitalize' }}>{selectedLabel}</p>
           </div>
-          <button className="btn btn--gold btn--sm" onClick={() => setShowNew(true)}>
+          <button className="btn btn--gold btn--sm" onClick={() => openNew()}>
             <Icon name="plus" size={15} color="#fff" /> Nuevo
           </button>
         </div>
@@ -129,92 +134,108 @@ export default function AgendaPage() {
         </div>
       </div>
 
-      <div className="px" style={{ paddingBottom: 24 }}>
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--faint)', fontSize: 13 }}>Cargando…</div>
-        )}
-        {error && (
-          <div style={{ padding: '14px 16px', borderRadius: 'var(--r)', background: 'rgba(180,83,63,.08)', color: 'var(--danger)', fontSize: 13 }}>
-            Error: {error}
+      <div className="px" style={{ paddingBottom: 32 }}>
+        {loading ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+            {ALL_SLOTS.map(s => (
+              <div key={s} style={{ display: 'flex', gap: 14, alignItems: 'center', minHeight: 52 }}>
+                <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--faint)' }}>{s}</span>
+                <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)', flexShrink: 0 }} />
+                <div style={{ flex: 1, height: 14, background: 'var(--surface-2)', borderRadius: 4 }} />
+              </div>
+            ))}
           </div>
-        )}
-        {!loading && !error && appointments.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--faint)' }}>
-            <Icon name="calendar" size={40} color="var(--faint)" />
-            <p style={{ marginTop: 12, fontSize: 14 }}>No hay turnos para este día</p>
-            <button className="btn btn--gold btn--sm" style={{ marginTop: 16 }} onClick={() => setShowNew(true)}>
-              <Icon name="plus" size={14} color="#fff" /> Agregar turno
-            </button>
-          </div>
-        )}
-        {!loading && !error && appointments.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {appointments.map(a => {
-              const isUpdating = updatingId === a.id;
-              const isDone = a.status === 'completado' || a.status === 'ausente' || a.status === 'cancelado';
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
+            {ALL_SLOTS.map(slot => {
+              const appt = appointments.find(a => a.time.slice(0, 5) === slot);
+              const isUpdating = appt && updatingId === appt.id;
+              const isDone = appt && (appt.status === 'completado' || appt.status === 'ausente' || appt.status === 'cancelado');
+
               return (
-                <div key={a.id} className="card" style={{ padding: '14px 16px', opacity: a.status === 'ausente' ? 0.75 : 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    {/* Hora */}
-                    <div style={{ textAlign: 'center', minWidth: 44, flexShrink: 0 }}>
-                      <div style={{ fontSize: 17, fontWeight: 700, fontFamily: 'var(--serif)', color: 'var(--ink)', lineHeight: 1 }}>
-                        {a.time.slice(0, 5)}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--faint)', marginTop: 2 }}>hs</div>
-                    </div>
-                    <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)', flexShrink: 0 }} />
+                <div key={slot} style={{ display: 'flex', gap: 14, alignItems: 'stretch', minHeight: 52 }}>
+                  {/* Hora */}
+                  <div style={{ width: 44, flexShrink: 0, textAlign: 'right', paddingTop: 15, paddingBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: appt ? 'var(--ink)' : 'var(--faint)', fontFamily: 'var(--sans)' }}>
+                      {slot}
+                    </span>
+                  </div>
 
-                    {/* Paciente (clickeable → detalle) */}
-                    <div
-                      style={{ cursor: 'pointer', flexShrink: 0 }}
-                      onClick={() => a.patient?.id && router.push(`/panel/pacientes/${a.patient.id}`)}
-                    >
-                      <Avatar
-                        initials={(a.patient?.name ?? '?').split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
-                        tone="gold" size={38}
-                      />
-                    </div>
+                  {/* Línea vertical */}
+                  <div style={{ width: 1, background: appt ? 'var(--emerald)' : 'var(--line)', flexShrink: 0, borderRadius: 1 }} />
 
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
-                        onClick={() => a.patient?.id && router.push(`/panel/pacientes/${a.patient.id}`)}
-                      >
-                        {a.patient?.name ?? 'Paciente'}
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {a.service?.name ?? '—'} · {a.duration_min} min
-                      </div>
-                    </div>
+                  {/* Contenido */}
+                  <div style={{ flex: 1, padding: '6px 0' }}>
+                    {appt ? (
+                      <div style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', borderRadius: 12,
+                        background: appt.status === 'ausente' ? 'rgba(180,83,63,.05)' : 'var(--surface)',
+                        border: `1px solid ${appt.status === 'completado' ? 'rgba(154,124,58,.25)' : appt.status === 'ausente' ? 'rgba(180,83,63,.2)' : 'var(--line)'}`,
+                        boxShadow: 'var(--sh)',
+                        opacity: appt.status === 'ausente' ? 0.75 : 1,
+                      }}>
+                        <div
+                          style={{ cursor: 'pointer', flexShrink: 0 }}
+                          onClick={() => appt.patient?.id && router.push(`/panel/pacientes/${appt.patient.id}`)}
+                        >
+                          <Avatar
+                            initials={(appt.patient?.name ?? '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                            tone="gold" size={36}
+                          />
+                        </div>
 
-                    {/* Status chip or action buttons */}
-                    {isDone ? (
-                      <span className={`chip ${STATUS_CHIP[a.status] ?? ''}`} style={{ fontSize: 11, padding: '4px 9px', flexShrink: 0 }}>
-                        {STATUS_LABEL[a.status] ?? a.status}
-                      </span>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div
+                            style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+                            onClick={() => appt.patient?.id && router.push(`/panel/pacientes/${appt.patient.id}`)}
+                          >
+                            {appt.patient?.name ?? 'Paciente'}
+                          </div>
+                          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {appt.service?.name ?? '—'} · {appt.duration_min} min
+                          </div>
+                        </div>
+
+                        {isDone ? (
+                          <span className={`chip ${STATUS_CHIP[appt.status] ?? ''}`} style={{ fontSize: 11, padding: '4px 9px', flexShrink: 0 }}>
+                            {STATUS_LABEL[appt.status] ?? appt.status}
+                          </span>
+                        ) : (
+                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            <button
+                              title="Vino"
+                              disabled={!!isUpdating}
+                              onClick={() => handleStatusChange(appt.id, 'completado')}
+                              style={{ width: 32, height: 32, borderRadius: 9, border: '1.5px solid var(--emerald)', background: 'var(--emerald-tint)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Icon name="check" size={15} color="var(--emerald)" stroke={2.2} />
+                            </button>
+                            <button
+                              title="No vino"
+                              disabled={!!isUpdating}
+                              onClick={() => handleStatusChange(appt.id, 'ausente')}
+                              style={{ width: 32, height: 32, borderRadius: 9, border: '1.5px solid var(--danger)', background: 'rgba(180,83,63,.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Icon name="x" size={15} color="var(--danger)" stroke={2.2} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
-                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                        <button
-                          title="Vino"
-                          disabled={isUpdating}
-                          onClick={() => handleStatusChange(a.id, 'completado')}
-                          style={{
-                            width: 34, height: 34, borderRadius: 10, border: '1.5px solid var(--emerald)',
-                            background: 'var(--emerald-tint)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                          <Icon name="check" size={16} color="var(--emerald)" stroke={2.2} />
-                        </button>
-                        <button
-                          title="No vino"
-                          disabled={isUpdating}
-                          onClick={() => handleStatusChange(a.id, 'ausente')}
-                          style={{
-                            width: 34, height: 34, borderRadius: 10, border: '1.5px solid var(--danger)',
-                            background: 'rgba(180,83,63,.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                          <Icon name="x" size={16} color="var(--danger)" stroke={2.2} />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => openNew(slot)}
+                        style={{
+                          width: '100%', height: 40, borderRadius: 10,
+                          border: '1.5px dashed var(--line)',
+                          background: 'transparent', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          color: 'var(--faint)', fontSize: 12.5,
+                          transition: 'border-color .15s, background .15s',
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--emerald)'; e.currentTarget.style.background = 'var(--emerald-tint)'; e.currentTarget.style.color = 'var(--emerald)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; }}
+                      >
+                        <Icon name="plus" size={13} color="currentColor" /> Disponible
+                      </button>
                     )}
                   </div>
                 </div>
@@ -228,6 +249,7 @@ export default function AgendaPage() {
     {showNew && (
       <NewAppointmentModal
         date={selectedDate}
+        defaultSlot={newDefaultSlot}
         onSave={newAppt => {
           setAppointments(prev => [...prev, newAppt].sort((a, b) => a.time.localeCompare(b.time)));
           setShowNew(false);
