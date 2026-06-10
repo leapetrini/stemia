@@ -1,16 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 
-const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
+const FULL_MONTHS = ['Enero','Febrero','Marzo','Abril','Mayo','Junio',
   'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-const DAY_LABELS = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+const DAY_ABBR = ['Do','Lu','Ma','Mi','Ju','Vi','Sá'];
 
 function toISO(y: number, m: number, d: number) {
   return `${y}-${String(m + 1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function getWeekdaysInHalf(year: number, month: number, half: 1 | 2): string[] {
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const start = half === 1 ? 1 : 16;
+  const end = half === 1 ? 15 : daysInMonth;
+  const result: string[] = [];
+  for (let d = start; d <= end; d++) {
+    const dow = new Date(year, month, d).getDay();
+    if (dow !== 0 && dow !== 6) result.push(toISO(year, month, d));
+  }
+  return result;
 }
 
 export default function AgendaConfigPage() {
@@ -18,69 +30,81 @@ export default function AgendaConfigPage() {
   const today = new Date();
   const todayISO = toISO(today.getFullYear(), today.getMonth(), today.getDate());
 
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [blockedDates, setBlockedDates] = useState<Set<string>>(new Set());
-  const [bookingUntil, setBookingUntil] = useState('');
+  const [calYear, setCalYear] = useState(today.getFullYear());
+  const [calMonth, setCalMonth] = useState(today.getMonth());
+  const [openDates, setOpenDates] = useState<Set<string>>(new Set());
   const [professionalId, setProfessionalId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [toggling, setToggling] = useState<string | null>(null);
-  const [savedOk, setSavedOk] = useState(false);
+  const [togglingHalf, setTogglingHalf] = useState<string | null>(null);
+  const [togglingDay, setTogglingDay] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       supabase.from('professionals').select('id').limit(1).single(),
-      supabase.from('blocked_dates').select('date'),
-      supabase.from('settings').select('value').eq('key', 'booking_until_date').maybeSingle(),
-    ]).then(([profRes, blockRes, settingRes]) => {
+      supabase.from('available_dates').select('date'),
+    ]).then(([profRes, availRes]) => {
       if (profRes.data) setProfessionalId(profRes.data.id);
-      setBlockedDates(new Set((blockRes.data ?? []).map((b: { date: string }) => b.date)));
-      if (settingRes.data) setBookingUntil(settingRes.data.value);
+      setOpenDates(new Set((availRes.data ?? []).map((r: { date: string }) => r.date)));
       setLoading(false);
     });
   }, []);
 
-  const toggleDay = async (dateISO: string, isWeekend: boolean, isPast: boolean) => {
-    if (isWeekend || isPast || !professionalId || toggling) return;
-    setToggling(dateISO);
-    if (blockedDates.has(dateISO)) {
-      await supabase.from('blocked_dates').delete()
-        .eq('professional_id', professionalId).eq('date', dateISO);
-      setBlockedDates(prev => { const n = new Set(prev); n.delete(dateISO); return n; });
-    } else {
-      await supabase.from('blocked_dates').insert({ professional_id: professionalId, date: dateISO });
-      setBlockedDates(prev => new Set([...prev, dateISO]));
+  const months = useMemo(() => {
+    const result = [];
+    for (let i = 0; i < 12; i++) {
+      const total = today.getMonth() + i;
+      result.push({ year: today.getFullYear() + Math.floor(total / 12), month: total % 12 });
     }
-    setToggling(null);
-  };
+    return result;
+  }, []);
 
-  const saveHorizon = async () => {
-    if (!bookingUntil) return;
-    setSaving(true);
-    await supabase.from('settings').upsert({ key: 'booking_until_date', value: bookingUntil });
-    setSaving(false);
-    setSavedOk(true);
-    setTimeout(() => setSavedOk(false), 2500);
-  };
+  const toggleHalf = useCallback(async (year: number, month: number, half: 1 | 2) => {
+    if (!professionalId) return;
+    const key = `${year}-${month}-${half}`;
+    if (togglingHalf === key) return;
+    setTogglingHalf(key);
+    const weekdays = getWeekdaysInHalf(year, month, half);
+    const openCount = weekdays.filter(d => openDates.has(d)).length;
+    const isFullyOpen = openCount === weekdays.length && weekdays.length > 0;
+    if (isFullyOpen) {
+      await supabase.from('available_dates').delete()
+        .eq('professional_id', professionalId).in('date', weekdays);
+      setOpenDates(prev => { const n = new Set(prev); weekdays.forEach(d => n.delete(d)); return n; });
+    } else {
+      const toAdd = weekdays.filter(d => !openDates.has(d));
+      if (toAdd.length > 0) {
+        await supabase.from('available_dates').upsert(toAdd.map(date => ({ professional_id: professionalId, date })));
+        setOpenDates(prev => new Set([...prev, ...toAdd]));
+      }
+    }
+    setTogglingHalf(null);
+  }, [openDates, professionalId, togglingHalf]);
 
-  const firstDayOfMonth = new Date(viewYear, viewMonth, 1).getDay();
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const toggleDay = useCallback(async (dateISO: string) => {
+    if (!professionalId || togglingDay || dateISO < todayISO) return;
+    const [y, m, d] = dateISO.split('-').map(Number);
+    const dow = new Date(y, m - 1, d).getDay();
+    if (dow === 0 || dow === 6) return;
+    setTogglingDay(dateISO);
+    if (openDates.has(dateISO)) {
+      await supabase.from('available_dates').delete()
+        .eq('professional_id', professionalId).eq('date', dateISO);
+      setOpenDates(prev => { const n = new Set(prev); n.delete(dateISO); return n; });
+    } else {
+      await supabase.from('available_dates').upsert({ professional_id: professionalId, date: dateISO });
+      setOpenDates(prev => new Set([...prev, dateISO]));
+    }
+    setTogglingDay(null);
+  }, [openDates, professionalId, togglingDay, todayISO]);
 
-  const cells: (number | null)[] = [
-    ...Array(firstDayOfMonth).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  // Compact calendar data
+  const firstDayOfCal = new Date(calYear, calMonth, 1).getDay();
+  const daysInCal = new Date(calYear, calMonth + 1, 0).getDate();
+  const calCells: (number | null)[] = [
+    ...Array(firstDayOfCal).fill(null),
+    ...Array.from({ length: daysInCal }, (_, i) => i + 1),
   ];
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
-    else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
-    else setViewMonth(m => m + 1);
-  };
+  while (calCells.length % 7 !== 0) calCells.push(null);
 
   return (
     <>
@@ -92,128 +116,196 @@ export default function AgendaConfigPage() {
             <p className="scrhead__sub">Configuración</p>
           </div>
         </div>
-
         <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
           <button onClick={() => router.push('/panel/agenda')}
             style={{ padding: '7px 16px', borderRadius: 99, border: '1.5px solid var(--line)',
-              background: 'transparent', color: 'var(--muted)',
-              fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13 }}>
+              background: 'transparent', color: 'var(--muted)', fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13 }}>
             Turnos
           </button>
-          <button
-            style={{ padding: '7px 16px', borderRadius: 99, border: 'none',
-              background: 'var(--emerald)', color: '#fff',
-              fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+          <button style={{ padding: '7px 16px', borderRadius: 99, border: 'none',
+            background: 'var(--emerald)', color: '#fff', fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
             Configuración
           </button>
         </div>
       </div>
 
-      <div className="px" style={{ paddingBottom: 40 }}>
+      <div className="px" style={{ paddingBottom: 48 }}>
         {loading ? (
-          <div style={{ paddingTop: 40, textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>Cargando…</div>
+          <div style={{ paddingTop: 60, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, color: 'var(--faint)' }}>
+            <div style={{ width: 32, height: 32, border: '3px solid var(--line)', borderTopColor: 'var(--emerald)', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
+            <span style={{ fontSize: 13 }}>Cargando configuración…</span>
+          </div>
         ) : (
           <>
-          {/* Horizon setting */}
-          <div style={{ marginBottom: 20, padding: '18px 20px', background: 'var(--surface)', borderRadius: 'var(--r)', border: '1px solid var(--line)', boxShadow: 'var(--sh)' }}>
-            <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)', marginBottom: 3 }}>
-              Habilitar turnos hasta
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14 }}>
-              Los pacientes solo podrán reservar hasta esta fecha.
-            </div>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <input type="date" className="input" style={{ flex: 1 }}
-                value={bookingUntil} min={todayISO}
-                onChange={e => setBookingUntil(e.target.value)} />
-              <button className="btn btn--gold btn--sm" onClick={saveHorizon}
-                disabled={saving || !bookingUntil} style={{ flexShrink: 0 }}>
-                {savedOk ? <><Icon name="check" size={14} color="#fff" stroke={2.5} /> Guardado</> : saving ? 'Guardando…' : 'Guardar'}
-              </button>
-            </div>
-          </div>
-
-          {/* Calendar */}
-          <div style={{ background: 'var(--surface)', borderRadius: 'var(--r)', border: '1px solid var(--line)', boxShadow: 'var(--sh)', overflow: 'hidden' }}>
-            {/* Month nav */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--line)' }}>
-              <button onClick={prevMonth} className="iconbtn" style={{ width: 32, height: 32 }}>
-                <Icon name="chevL" size={16} />
-              </button>
-              <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--ink)', fontFamily: 'var(--serif)' }}>
-                {MONTH_NAMES[viewMonth]} {viewYear}
+          {/* ── Habilitar por períodos ── */}
+          <div style={{ marginBottom: 32 }}>
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 17, fontFamily: 'var(--serif)', fontWeight: 600, color: 'var(--ink)' }}>
+                Habilitar por períodos
               </div>
-              <button onClick={nextMonth} className="iconbtn" style={{ width: 32, height: 32 }}>
-                <Icon name="chevR" size={16} />
-              </button>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>
+                Por defecto la agenda está cerrada. Activá las quincenas que querés abrir.
+              </div>
             </div>
 
-            {/* Day headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', borderBottom: '1px solid var(--line)' }}>
-              {DAY_LABELS.map(d => (
-                <div key={d} style={{ padding: '8px 0', textAlign: 'center', fontSize: 10.5, fontWeight: 700, color: 'var(--faint)', letterSpacing: '.04em' }}>
-                  {d}
-                </div>
-              ))}
-            </div>
-
-            {/* Days */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '8px', gap: 2 }}>
-              {cells.map((day, i) => {
-                if (!day) return <div key={`e-${i}`} style={{ aspectRatio: '1' }} />;
-                const dateISO = toISO(viewYear, viewMonth, day);
-                const dow = new Date(viewYear, viewMonth, day).getDay();
-                const isWeekend = dow === 0 || dow === 6;
-                const isPast = dateISO < todayISO;
-                const isBlocked = blockedDates.has(dateISO);
-                const isToday = dateISO === todayISO;
-                const isToggling = toggling === dateISO;
-                const disabled = isWeekend || isPast;
-
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {months.map(({ year, month }) => {
+                const daysInMonth = new Date(year, month + 1, 0).getDate();
                 return (
-                  <button key={day}
-                    onClick={() => toggleDay(dateISO, isWeekend, isPast)}
-                    style={{
-                      aspectRatio: '1',
-                      borderRadius: 10,
-                      border: isBlocked
-                        ? '1.5px solid rgba(180,83,63,.3)'
-                        : isToday
-                        ? '1.5px solid var(--emerald)'
-                        : '1.5px solid transparent',
-                      background: isBlocked ? 'rgba(180,83,63,.08)' : 'transparent',
-                      color: isBlocked ? 'var(--danger)'
-                        : disabled ? 'var(--faint)'
-                        : isToday ? 'var(--emerald)'
-                        : 'var(--ink)',
-                      fontSize: 13.5,
-                      fontWeight: isToday ? 700 : 500,
-                      cursor: disabled ? 'default' : 'pointer',
-                      opacity: isToggling ? 0.4 : disabled ? 0.3 : 1,
-                      fontFamily: 'var(--sans)',
-                      transition: 'all .1s',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}>
-                    {day}
-                  </button>
+                  <div key={`${year}-${month}`}
+                    style={{ background: 'var(--surface)', borderRadius: 'var(--r)', border: '1px solid var(--line)', boxShadow: 'var(--sh-sm)', overflow: 'hidden' }}>
+                    {/* Month header */}
+                    <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--line)', background: 'var(--surface-2)' }}>
+                      <div style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 14, color: 'var(--ink)', letterSpacing: '.01em' }}>
+                        {FULL_MONTHS[month]}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: 'var(--faint)', marginTop: 0 }}>{year}</div>
+                    </div>
+                    {/* Halves */}
+                    <div style={{ display: 'flex', gap: 6, padding: 8 }}>
+                      {([1, 2] as const).map(half => {
+                        const weekdays = getWeekdaysInHalf(year, month, half);
+                        const openCount = weekdays.filter(d => openDates.has(d)).length;
+                        const total = weekdays.length;
+                        const isFullyOpen = openCount === total && total > 0;
+                        const isPartial = openCount > 0 && !isFullyOpen;
+                        const key = `${year}-${month}-${half}`;
+                        const isSpinning = togglingHalf === key;
+                        const halfLabel = half === 1 ? `1–15` : `16–${daysInMonth}`;
+
+                        return (
+                          <button key={half}
+                            onClick={() => toggleHalf(year, month, half)}
+                            disabled={!!togglingHalf}
+                            style={{
+                              flex: 1, padding: '10px 4px 10px', borderRadius: 10,
+                              background: isFullyOpen
+                                ? 'var(--emerald)'
+                                : isPartial
+                                ? 'rgba(154,124,58,.1)'
+                                : 'var(--surface-2)',
+                              border: isFullyOpen
+                                ? '1.5px solid transparent'
+                                : isPartial
+                                ? '1.5px solid rgba(154,124,58,.35)'
+                                : '1.5px solid var(--line)',
+                              color: isFullyOpen ? '#fff' : isPartial ? 'var(--emerald)' : 'var(--faint)',
+                              cursor: togglingHalf ? 'default' : 'pointer',
+                              transition: 'background .2s, border .2s, color .2s, transform .1s',
+                              opacity: isSpinning ? 0.55 : 1,
+                              textAlign: 'center',
+                              transform: isSpinning ? 'scale(.97)' : 'scale(1)',
+                            }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--sans)', letterSpacing: '.02em', marginBottom: 4, opacity: isFullyOpen ? 0.8 : 1 }}>
+                              {halfLabel}
+                            </div>
+                            <div style={{ fontSize: 11.5, fontWeight: 700, fontFamily: 'var(--sans)', lineHeight: 1 }}>
+                              {isFullyOpen
+                                ? `${total} días ✓`
+                                : isPartial
+                                ? `${openCount}/${total}`
+                                : 'Cerrado'}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 );
               })}
             </div>
+          </div>
 
-            {/* Legend */}
-            <div style={{ padding: '10px 20px 14px', borderTop: '1px solid var(--line)', display: 'flex', gap: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--muted)' }}>
-                <div style={{ width: 12, height: 12, borderRadius: 4, background: 'rgba(180,83,63,.12)', border: '1px solid rgba(180,83,63,.3)' }} />
-                Bloqueado
+          {/* ── Ajuste por día ── */}
+          <div>
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 17, fontFamily: 'var(--serif)', fontWeight: 600, color: 'var(--ink)' }}>
+                Ajuste por día
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--muted)' }}>
-                <div style={{ width: 12, height: 12, borderRadius: 4, border: '1.5px solid var(--emerald)' }} />
-                Hoy
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>
+                Tocá un día para abrirlo o cerrarlo individualmente.
               </div>
-              <div style={{ fontSize: 11.5, color: 'var(--faint)', marginLeft: 'auto' }}>
-                Tocá un día para bloquearlo
+            </div>
+
+            <div style={{ background: 'var(--surface)', borderRadius: 'var(--r)', border: '1px solid var(--line)', boxShadow: 'var(--sh)', overflow: 'hidden' }}>
+              {/* Month nav */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '1px solid var(--line)' }}>
+                <button onClick={() => { if (calMonth === 0) { setCalYear(y => y - 1); setCalMonth(11); } else setCalMonth(m => m - 1); }}
+                  className="iconbtn" style={{ width: 30, height: 30, flexShrink: 0 }}>
+                  <Icon name="chevL" size={14} />
+                </button>
+                <div style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 15, color: 'var(--ink)' }}>
+                  {FULL_MONTHS[calMonth]} {calYear}
+                </div>
+                <button onClick={() => { if (calMonth === 11) { setCalYear(y => y + 1); setCalMonth(0); } else setCalMonth(m => m + 1); }}
+                  className="iconbtn" style={{ width: 30, height: 30, flexShrink: 0 }}>
+                  <Icon name="chevR" size={14} />
+                </button>
+              </div>
+
+              {/* Day headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '6px 8px 0' }}>
+                {DAY_ABBR.map(d => (
+                  <div key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: 'var(--faint)', padding: '4px 0', letterSpacing: '.03em' }}>
+                    {d}
+                  </div>
+                ))}
+              </div>
+
+              {/* Day cells */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', padding: '0 8px 10px', gap: 2 }}>
+                {calCells.map((day, i) => {
+                  if (!day) return <div key={`e${i}`} style={{ aspectRatio: '1' }} />;
+                  const dateISO = toISO(calYear, calMonth, day);
+                  const dow = new Date(calYear, calMonth, day).getDay();
+                  const isWeekend = dow === 0 || dow === 6;
+                  const isPast = dateISO < todayISO;
+                  const isOpen = openDates.has(dateISO);
+                  const isToday = dateISO === todayISO;
+                  const isToggling = togglingDay === dateISO;
+                  const canClick = !isWeekend && !isPast;
+
+                  return (
+                    <button key={day}
+                      onClick={() => canClick && toggleDay(dateISO)}
+                      style={{
+                        aspectRatio: '1', borderRadius: '50%', border: 'none',
+                        background: isOpen
+                          ? 'var(--emerald)'
+                          : isToday
+                          ? 'var(--emerald-tint)'
+                          : 'transparent',
+                        color: isOpen
+                          ? '#fff'
+                          : isToday
+                          ? 'var(--emerald)'
+                          : (isWeekend || isPast)
+                          ? 'var(--faint)'
+                          : 'var(--ink)',
+                        fontSize: 12, fontWeight: isOpen ? 700 : 400,
+                        cursor: canClick ? 'pointer' : 'default',
+                        opacity: isToggling ? 0.4 : (isWeekend || isPast) ? 0.3 : 1,
+                        transition: 'background .15s, color .15s',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        outline: 'none',
+                        fontFamily: 'var(--sans)',
+                      }}>
+                      {day}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Legend */}
+              <div style={{ padding: '8px 16px 12px', borderTop: '1px solid var(--line)', display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)' }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--emerald)' }} />
+                  Abierto
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--muted)' }}>
+                  <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--surface-2)', border: '1px solid var(--line)' }} />
+                  Cerrado
+                </div>
               </div>
             </div>
           </div>
@@ -221,6 +313,10 @@ export default function AgendaConfigPage() {
         )}
       </div>
     </div>
+
+    <style>{`
+      @keyframes spin { to { transform: rotate(360deg); } }
+    `}</style>
     </>
   );
 }

@@ -16,7 +16,7 @@ const SERVICE = {
 };
 
 const DAY_NAMES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
-const MONTH_NAMES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 // Slots de 10:00 a 16:30 cada 30 min
 const ALL_SLOTS = Array.from({ length: 14 }, (_, i) => {
@@ -101,7 +101,7 @@ function StepIndicator({ step }: { step: number }) {
 
 // ── Date & Time picker ──────────────────────────────────────────
 function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }) => void }) {
-  const allDays = useMemo(() => genDays(30), []);
+  const allDays = useMemo(() => genDays(120), []);
   const [startIdx, setStartIdx] = useState(0);
   const [selDay, setSelDay] = useState<Day | null>(null);
   const [selTime, setSelTime] = useState<string | null>(null);
@@ -125,9 +125,8 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
 
     Promise.all([
       supabase.from('appointments').select('date, time').gte('date', startISO).lte('date', endISO),
-      supabase.from('blocked_dates').select('date').gte('date', startISO).lte('date', endISO),
-      supabase.from('settings').select('value').eq('key', 'booking_until_date').maybeSingle(),
-    ]).then(([apptRes, blockRes, settingRes]) => {
+      supabase.from('available_dates').select('date').gte('date', startISO).lte('date', endISO),
+    ]).then(([apptRes, availRes]) => {
       const byDay: Record<string, string[]> = {};
       for (const a of apptRes.data ?? []) {
         if (!byDay[a.date]) byDay[a.date] = [];
@@ -135,12 +134,10 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
       }
       setBookedByDay(byDay);
 
-      const blocked = new Set((blockRes.data ?? []).map((b: { date: string }) => b.date));
-      const horizon = settingRes.data?.value ?? null;
+      const openDays = new Set((availRes.data ?? []).map((a: { date: string }) => a.date));
 
       const filtered = allDays.filter(day => {
-        if (horizon && day.dateISO > horizon) return false;
-        if (blocked.has(day.dateISO)) return false;
+        if (!openDays.has(day.dateISO)) return false;
         const dayBooked = byDay[day.dateISO] ?? [];
         return ALL_SLOTS.some(t => {
           if (dayBooked.includes(t)) return false;
@@ -155,11 +152,11 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
 
   const visible = (availableDays ?? []).slice(startIdx, startIdx + 5);
 
-  // Month label from visible window
+  // Month label from visible window — full name
   const monthLabel = useMemo(() => {
     if (!visible.length) return '';
     const months = [...new Set(visible.map(d => d.month))];
-    return months.join(' / ').toUpperCase();
+    return months.join(' · ');
   }, [visible]);
 
   const slots = selDay
@@ -197,7 +194,7 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', marginBottom: 12 }}>
           <div className="field__label" style={{ margin: 0 }}>Elegir fecha</div>
           {monthLabel && (
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--muted)', letterSpacing: '.08em' }}>{monthLabel}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{monthLabel}</div>
           )}
         </div>
 
@@ -231,8 +228,8 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
                       color: isSel ? '#fff' : 'var(--emerald)',
                       cursor: 'pointer', transition: 'all .12s',
                     }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' as const, opacity: .8 }}>{d.dayName}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>{d.day}</div>
+                    <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' as const, opacity: .8 }}>{d.dayName}</div>
+                    <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.2 }}>{d.day}</div>
                   </button>
                 );
               })}

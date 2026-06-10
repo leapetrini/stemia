@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
@@ -80,8 +80,13 @@ export default function AgendaPage() {
 
   const handleStatusChange = async (id: string, newStatus: string) => {
     setUpdatingId(id);
-    const { error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id);
-    if (!error) setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
+    if (newStatus === 'ausente') {
+      const { error } = await supabase.from('appointments').delete().eq('id', id);
+      if (!error) setAppointments(prev => prev.filter(a => a.id !== id));
+    } else {
+      const { error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id);
+      if (!error) setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
+    }
     setUpdatingId(null);
   };
 
@@ -90,10 +95,23 @@ export default function AgendaPage() {
     setShowNew(true);
   };
 
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = addDays(new Date(), i);
-    return { iso: toISO(d), label: d.toLocaleDateString('es-AR', { weekday: 'short' }), day: d.getDate() };
-  });
+  const days = useMemo(() => {
+    const result: { iso: string; label: string; day: number }[] = [];
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
+    while (result.length < 14) {
+      const dow = cursor.getDay();
+      if (dow !== 0 && dow !== 6) {
+        result.push({
+          iso: toISO(cursor),
+          label: cursor.toLocaleDateString('es-AR', { weekday: 'short' }),
+          day: cursor.getDate(),
+        });
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    return result;
+  }, []);
 
   const selectedLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-AR', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -129,21 +147,22 @@ export default function AgendaPage() {
           </button>
         </div>
 
-        {/* Date strip */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 14, overflowX: 'auto', paddingBottom: 2 }}>
+        {/* Date strip — 14 working days, no sticky hover */}
+        <div style={{ display: 'flex', gap: 4, marginTop: 14, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
           {days.map(d => {
             const active = d.iso === selectedDate;
             return (
               <button key={d.iso} onClick={() => setSelectedDate(d.iso)}
                 style={{
                   flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  gap: 4, padding: '8px 12px', borderRadius: 12, border: 'none', cursor: 'pointer',
-                  background: active ? 'var(--emerald)' : 'var(--surface-2)',
+                  gap: 3, padding: '8px 11px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                  background: active ? 'var(--emerald)' : 'transparent',
                   color: active ? '#fff' : 'var(--muted)',
-                  fontFamily: 'var(--sans)', transition: 'background .15s',
+                  fontFamily: 'var(--sans)', transition: 'background .15s, color .15s',
+                  outline: 'none',
                 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>{d.label}</span>
-                <span style={{ fontSize: 18, fontWeight: 700, lineHeight: 1 }}>{d.day}</span>
+                <span style={{ fontSize: 20, fontWeight: 700, lineHeight: 1 }}>{d.day}</span>
               </button>
             );
           })}
