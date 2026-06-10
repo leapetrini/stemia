@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
   // 1. Obtener professional y service de la DB
   const [profRes, svcRes] = await Promise.all([
     supabaseAdmin.from('professionals').select('id').limit(1).single(),
-    supabaseAdmin.from('services').select('id').eq('active', true).limit(1).single(),
+    supabaseAdmin.from('services').select('id').eq('name', 'Consulta online de piel').eq('active', true).limit(1).single(),
   ]);
 
   if (profRes.error || svcRes.error) {

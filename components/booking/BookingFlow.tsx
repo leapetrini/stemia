@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
+import { supabase } from '@/lib/supabase';
 import type { Professional } from '@/lib/types';
 
 const SERVICE = {
@@ -104,8 +105,20 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
   const [startIdx, setStartIdx] = useState(0);
   const [selDay, setSelDay] = useState<Day | null>(null);
   const [selTime, setSelTime] = useState<string | null>(null);
+  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
   const visible = allDays.slice(startIdx, startIdx + 5);
-  const slots = selDay ? genSlots(selDay.idx) : [];
+  const slots = selDay ? ALL_SLOTS.filter(t => !bookedTimes.includes(t)) : [];
+
+  useEffect(() => {
+    if (!selDay) return;
+    supabase
+      .from('appointments')
+      .select('time')
+      .eq('date', selDay.dateISO)
+      .then(({ data }) => {
+        setBookedTimes((data ?? []).map((a: { time: string }) => a.time.slice(0, 5)));
+      });
+  }, [selDay]);
 
   useEffect(() => {
     if (selDay && selTime) onSelect({ day: selDay, time: selTime });
@@ -139,7 +152,7 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
             {visible.map(d => {
               const isSel = selDay?.idx === d.idx;
               return (
-                <button key={d.idx} onClick={() => { setSelDay(d); setSelTime(null); }}
+                <button key={d.idx} onClick={() => { setSelDay(d); setSelTime(null); setBookedTimes([]); }}
                   style={{
                     width: '100%', padding: '8px 2px', borderRadius: 12, textAlign: 'center' as const,
                     background: isSel ? 'var(--emerald)' : '#e8f5ef',
