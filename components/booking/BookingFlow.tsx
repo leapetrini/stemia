@@ -107,7 +107,23 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
   const [selTime, setSelTime] = useState<string | null>(null);
   const [bookedTimes, setBookedTimes] = useState<string[]>([]);
   const visible = allDays.slice(startIdx, startIdx + 5);
-  const slots = selDay ? ALL_SLOTS.filter(t => !bookedTimes.includes(t)) : [];
+
+  const todayISO = (() => {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+  })();
+  const nowHHMM = (() => {
+    const n = new Date();
+    return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
+  })();
+
+  const slots = selDay
+    ? ALL_SLOTS.filter(t => {
+        if (bookedTimes.includes(t)) return false;
+        if (selDay.dateISO === todayISO && t <= nowHHMM) return false;
+        return true;
+      })
+    : [];
 
   useEffect(() => {
     if (!selDay) return;
