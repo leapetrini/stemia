@@ -91,7 +91,7 @@ export function NewAppointmentModal({ date, defaultSlot, onSave, onClose }: Prop
       .single();
 
     if (err) { setError('No se pudo guardar el turno.'); setSaving(false); return; }
-    onSave(data as NewAppointment);
+    onSave(data as unknown as NewAppointment);
   };
 
   const dateLabel = new Date(date + 'T12:00:00').toLocaleDateString('es-AR', {
