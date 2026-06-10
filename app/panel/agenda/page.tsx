@@ -113,6 +113,22 @@ export default function AgendaPage() {
           </button>
         </div>
 
+        {/* Sub-tabs */}
+        <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
+          <button
+            style={{ padding: '7px 16px', borderRadius: 99, border: 'none',
+              background: 'var(--emerald)', color: '#fff',
+              fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
+            Turnos
+          </button>
+          <button onClick={() => router.push('/panel/agenda/configuracion')}
+            style={{ padding: '7px 16px', borderRadius: 99, border: '1.5px solid var(--line)',
+              background: 'transparent', color: 'var(--muted)',
+              fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13 }}>
+            Configuración
+          </button>
+        </div>
+
         {/* Date strip */}
         <div style={{ display: 'flex', gap: 6, marginTop: 14, overflowX: 'auto', paddingBottom: 2 }}>
           {days.map(d => {

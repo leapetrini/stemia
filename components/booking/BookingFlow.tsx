@@ -105,40 +105,77 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
   const [startIdx, setStartIdx] = useState(0);
   const [selDay, setSelDay] = useState<Day | null>(null);
   const [selTime, setSelTime] = useState<string | null>(null);
-  const [bookedTimes, setBookedTimes] = useState<string[]>([]);
-  const visible = allDays.slice(startIdx, startIdx + 5);
+  const [bookedByDay, setBookedByDay] = useState<Record<string, string[]>>({});
+  const [availableDays, setAvailableDays] = useState<Day[] | null>(null); // null = loading
 
-  const todayISO = (() => {
+  const todayISO = useMemo(() => {
     const n = new Date();
     return `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-  })();
-  const nowHHMM = (() => {
+  }, []);
+  const nowHHMM = useMemo(() => {
     const n = new Date();
     return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}`;
-  })();
+  }, []);
+
+  // Fetch all availability data in one shot
+  useEffect(() => {
+    const startISO = allDays[0]?.dateISO;
+    const endISO = allDays[allDays.length - 1]?.dateISO;
+    if (!startISO || !endISO) { setAvailableDays([]); return; }
+
+    Promise.all([
+      supabase.from('appointments').select('date, time').gte('date', startISO).lte('date', endISO),
+      supabase.from('blocked_dates').select('date').gte('date', startISO).lte('date', endISO),
+      supabase.from('settings').select('value').eq('key', 'booking_until_date').maybeSingle(),
+    ]).then(([apptRes, blockRes, settingRes]) => {
+      const byDay: Record<string, string[]> = {};
+      for (const a of apptRes.data ?? []) {
+        if (!byDay[a.date]) byDay[a.date] = [];
+        byDay[a.date].push(a.time.slice(0, 5));
+      }
+      setBookedByDay(byDay);
+
+      const blocked = new Set((blockRes.data ?? []).map((b: { date: string }) => b.date));
+      const horizon = settingRes.data?.value ?? null;
+
+      const filtered = allDays.filter(day => {
+        if (horizon && day.dateISO > horizon) return false;
+        if (blocked.has(day.dateISO)) return false;
+        const dayBooked = byDay[day.dateISO] ?? [];
+        return ALL_SLOTS.some(t => {
+          if (dayBooked.includes(t)) return false;
+          if (day.dateISO === todayISO && t <= nowHHMM) return false;
+          return true;
+        });
+      });
+
+      setAvailableDays(filtered);
+    });
+  }, [allDays, todayISO, nowHHMM]);
+
+  const visible = (availableDays ?? []).slice(startIdx, startIdx + 5);
+
+  // Month label from visible window
+  const monthLabel = useMemo(() => {
+    if (!visible.length) return '';
+    const months = [...new Set(visible.map(d => d.month))];
+    return months.join(' / ').toUpperCase();
+  }, [visible]);
 
   const slots = selDay
     ? ALL_SLOTS.filter(t => {
-        if (bookedTimes.includes(t)) return false;
+        const dayBooked = bookedByDay[selDay.dateISO] ?? [];
+        if (dayBooked.includes(t)) return false;
         if (selDay.dateISO === todayISO && t <= nowHHMM) return false;
         return true;
       })
     : [];
 
   useEffect(() => {
-    if (!selDay) return;
-    supabase
-      .from('appointments')
-      .select('time')
-      .eq('date', selDay.dateISO)
-      .then(({ data }) => {
-        setBookedTimes((data ?? []).map((a: { time: string }) => a.time.slice(0, 5)));
-      });
-  }, [selDay]);
-
-  useEffect(() => {
     if (selDay && selTime) onSelect({ day: selDay, time: selTime });
   }, [selDay, selTime, onSelect]);
+
+  const totalAvail = availableDays?.length ?? 0;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
@@ -157,39 +194,57 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
 
       {/* Calendar strip */}
       <div style={{ padding: '18px 0 0' }}>
-        <div className="field__label" style={{ padding: '0 20px', marginBottom: 12 }}>Elegir fecha</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 10px' }}>
-          <button onClick={() => setStartIdx(Math.max(0, startIdx - 5))} disabled={startIdx === 0}
-            className="iconbtn" style={{ width: 32, height: 32, flexShrink: 0, opacity: startIdx === 0 ? 0.25 : 1 }}>
-            <Icon name="chevL" size={15} />
-          </button>
-
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
-            {visible.map(d => {
-              const isSel = selDay?.idx === d.idx;
-              return (
-                <button key={d.idx} onClick={() => { setSelDay(d); setSelTime(null); setBookedTimes([]); }}
-                  style={{
-                    width: '100%', padding: '8px 2px', borderRadius: 12, textAlign: 'center' as const,
-                    background: isSel ? 'var(--emerald)' : '#e8f5ef',
-                    border: `1.5px solid ${isSel ? 'transparent' : '#b7ddc8'}`,
-                    color: isSel ? '#fff' : 'var(--emerald)',
-                    cursor: 'pointer', transition: 'all .12s',
-                  }}>
-                  <div style={{ fontSize: 9.5, fontWeight: 600, opacity: .8 }}>{d.month}</div>
-                  <div style={{ fontSize: 10, fontWeight: 600 }}>{d.dayName}</div>
-                  <div style={{ fontSize: 20, fontWeight: 700, lineHeight: 1.15 }}>{d.day}</div>
-                </button>
-              );
-            })}
-          </div>
-
-          <button onClick={() => setStartIdx(Math.min(allDays.length - 5, startIdx + 5))}
-            disabled={startIdx + 5 >= allDays.length}
-            className="iconbtn" style={{ width: 32, height: 32, flexShrink: 0, opacity: startIdx + 5 >= allDays.length ? 0.25 : 1 }}>
-            <Icon name="chevR" size={15} />
-          </button>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', marginBottom: 12 }}>
+          <div className="field__label" style={{ margin: 0 }}>Elegir fecha</div>
+          {monthLabel && (
+            <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--muted)', letterSpacing: '.08em' }}>{monthLabel}</div>
+          )}
         </div>
+
+        {availableDays === null ? (
+          // Skeleton
+          <div style={{ display: 'flex', gap: 5, padding: '0 10px' }}>
+            {[0,1,2,3,4].map(i => (
+              <div key={i} style={{ flex: 1, height: 70, borderRadius: 12, background: 'var(--surface-2)', opacity: 0.6 + i * 0.08 }} />
+            ))}
+          </div>
+        ) : availableDays.length === 0 ? (
+          <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--faint)', fontSize: 13, lineHeight: 1.6 }}>
+            No hay turnos disponibles<br />en este momento.
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 10px' }}>
+            <button onClick={() => setStartIdx(Math.max(0, startIdx - 5))} disabled={startIdx === 0}
+              className="iconbtn" style={{ width: 32, height: 32, flexShrink: 0, opacity: startIdx === 0 ? 0.25 : 1 }}>
+              <Icon name="chevL" size={15} />
+            </button>
+
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
+              {visible.map(d => {
+                const isSel = selDay?.idx === d.idx;
+                return (
+                  <button key={d.idx} onClick={() => { setSelDay(d); setSelTime(null); }}
+                    style={{
+                      width: '100%', padding: '10px 2px', borderRadius: 12, textAlign: 'center' as const,
+                      background: isSel ? 'var(--emerald)' : '#e8f5ef',
+                      border: `1.5px solid ${isSel ? 'transparent' : '#b7ddc8'}`,
+                      color: isSel ? '#fff' : 'var(--emerald)',
+                      cursor: 'pointer', transition: 'all .12s',
+                    }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' as const, opacity: .8 }}>{d.dayName}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1.2 }}>{d.day}</div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button onClick={() => setStartIdx(Math.min(totalAvail - 5, startIdx + 5))}
+              disabled={startIdx + 5 >= totalAvail}
+              className="iconbtn" style={{ width: 32, height: 32, flexShrink: 0, opacity: startIdx + 5 >= totalAvail ? 0.25 : 1 }}>
+              <Icon name="chevR" size={15} />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Time slots */}
@@ -213,7 +268,7 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
         </div>
       )}
 
-      {!selDay && (
+      {!selDay && availableDays !== null && availableDays.length > 0 && (
         <div style={{ padding: '28px 20px 0', textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>
           Seleccioná una fecha para ver los horarios disponibles
         </div>

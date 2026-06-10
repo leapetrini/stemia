@@ -106,7 +106,10 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  const active = TABS.find(t => t.href === pathname)?.id ?? 'dashboard';
+  const active = (() => {
+    if (pathname === '/panel') return 'dashboard';
+    return TABS.filter(t => t.href !== '/panel').find(t => pathname.startsWith(t.href))?.id ?? 'dashboard';
+  })();
 
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
