@@ -9,21 +9,25 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(req: NextRequest) {
-  const { name, email, phone, day, time } = await req.json();
+  const { name, email, phone, day, time, service_id, professional_id } = await req.json();
 
   if (!name || !email || !phone || !day || !time) {
     return NextResponse.json({ error: 'Faltan datos' }, { status: 400 });
   }
 
-  // 1. Obtener professional y service de la DB
+  // 1. Obtener professional y service de la DB (validados por id si vienen
+  // del flujo nuevo; fallback al único servicio/profesional si no)
+  const profQuery = supabaseAdmin.from('professionals').select('id, name');
+  const svcQuery = supabaseAdmin.from('services').select('id, name, duration_min, deposit_amount').eq('active', true);
+
   const [profRes, svcRes] = await Promise.all([
-    supabaseAdmin.from('professionals').select('id, name').limit(1).single(),
-    supabaseAdmin.from('services').select('id, name, deposit_amount').eq('name', 'Consulta online de piel').eq('active', true).limit(1).single(),
+    (professional_id ? profQuery.eq('id', professional_id) : profQuery).limit(1).single(),
+    (service_id ? svcQuery.eq('id', service_id) : svcQuery.eq('name', 'Consulta online de piel')).limit(1).single(),
   ]);
 
   if (profRes.error || svcRes.error) {
     console.error('Error fetching prof/svc:', profRes.error, svcRes.error);
-    return NextResponse.json({ error: 'Error de configuración' }, { status: 500 });
+    return NextResponse.json({ error: 'El servicio o profesional seleccionado no está disponible' }, { status: 400 });
   }
 
   const depositAmount = Number(svcRes.data.deposit_amount ?? 0);
@@ -64,7 +68,7 @@ export async function POST(req: NextRequest) {
       service_id: svcRes.data.id,
       date: day.dateISO,
       time,
-      duration_min: 30,
+      duration_min: svcRes.data.duration_min ?? 30,
       status: requiresDeposit ? 'pendiente' : 'confirmado',
       notes: null,
       deposit_paid: false,

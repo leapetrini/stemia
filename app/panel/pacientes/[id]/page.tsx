@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { PatientModal, type PatientData } from '@/components/panel/PatientModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 type Patient = PatientData;
 
@@ -75,6 +76,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const [noteText, setNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -117,6 +119,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
     await supabase.from('clinical_notes').delete().eq('id', noteId);
     setNotes(prev => prev.filter(n => n.id !== noteId));
     setDeletingId(null);
+    setConfirmDeleteId(null);
   };
 
   if (loading) {
@@ -358,7 +361,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                                     Dra. Valentina Calvo · {fmtTime(note.created_at)}
                                   </span>
                                   <button
-                                    onClick={() => handleDeleteNote(note.id)}
+                                    onClick={() => setConfirmDeleteId(note.id)}
                                     disabled={deletingId === note.id}
                                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: deletingId === note.id ? 0.4 : 1 }}
                                     title="Eliminar nota"
@@ -458,6 +461,18 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
         )}
       </div>
     </div>
+
+    {confirmDeleteId && (
+      <ConfirmDialog
+        title="Eliminar nota clínica"
+        message="La nota se eliminará definitivamente de la historia clínica. Esta acción no se puede deshacer."
+        confirmLabel="Sí, eliminar"
+        tone="danger"
+        loading={deletingId === confirmDeleteId}
+        onConfirm={() => handleDeleteNote(confirmDeleteId)}
+        onClose={() => setConfirmDeleteId(null)}
+      />
+    )}
 
     {editing && patient && (
       <PatientModal

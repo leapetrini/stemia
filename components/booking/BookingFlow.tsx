@@ -4,16 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { supabase } from '@/lib/supabase';
-import type { Professional } from '@/lib/types';
-
-const SERVICE = {
-  id: 's1',
-  name: 'Consulta online de piel',
-  description: 'Evaluación dermatológica por videollamada',
-  duration_min: 30,
-  price: 0,
-  modality: 'Online',
-};
+import type { Professional, Service } from '@/lib/types';
 
 const DAY_NAMES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -64,34 +55,41 @@ function genDays(n = 30): Day[] {
   return days;
 }
 
-function genSlots(_dayIdx: number): string[] {
-  return ALL_SLOTS;
+function fmtPrice(n: number) {
+  return '$ ' + n.toLocaleString('es-AR');
 }
 
 // ── Step indicator ──────────────────────────────────────────────
+const STEPS = [
+  { n: 1, label: 'Servicio' },
+  { n: 2, label: 'Profesional' },
+  { n: 3, label: 'Horario' },
+  { n: 4, label: 'Confirmar' },
+];
+
 function StepIndicator({ step }: { step: number }) {
   return (
     <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Paso {step} de 2</span>
+        <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Paso {step} de {STEPS.length}</span>
         <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-          {step === 1 ? 'Seleccionar Fecha y hora' : 'Confirmar turno'}
+          {step === 1 ? 'Seleccionar servicio' : step === 2 ? 'Seleccionar profesional' : step === 3 ? 'Seleccionar fecha y hora' : 'Confirmar turno'}
         </span>
       </div>
-      <div style={{ display: 'flex', gap: 6 }}>
-        {[{ n: 1, label: 'Horario' }, { n: 2, label: 'Confirmar' }].map(s => (
+      <div style={{ display: 'flex', gap: 5 }}>
+        {STEPS.map(s => (
           <div key={s.n} style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-            padding: '8px 10px', borderRadius: 999,
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+            padding: '7px 6px', borderRadius: 999, minWidth: 0,
             background: step === s.n ? 'var(--emerald)' : step > s.n ? 'var(--emerald-tint)' : 'var(--surface-2)',
             border: `1px solid ${step === s.n ? 'transparent' : step > s.n ? 'var(--emerald-tint-2)' : 'var(--line)'}`,
-            fontSize: 12, fontWeight: 600,
+            fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden',
             color: step === s.n ? '#fff' : step > s.n ? 'var(--emerald)' : 'var(--muted)',
           }}>
             {step > s.n
-              ? <Icon name="check" size={12} color="var(--emerald)" stroke={2.5} />
-              : <span style={{ fontWeight: 700, marginRight: 2 }}>{s.n}</span>}
-            {s.label}
+              ? <Icon name="check" size={11} color="var(--emerald)" stroke={2.5} />
+              : <span style={{ fontWeight: 700 }}>{s.n}</span>}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.label}</span>
           </div>
         ))}
       </div>
@@ -99,8 +97,109 @@ function StepIndicator({ step }: { step: number }) {
   );
 }
 
-// ── Date & Time picker ──────────────────────────────────────────
-function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }) => void }) {
+// ── Step 1: servicio ────────────────────────────────────────────
+function ServicePicker({ services, selected, onSelect }: {
+  services: Service[] | null;
+  selected: Service | null;
+  onSelect: (s: Service) => void;
+}) {
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
+      <div className="field__label" style={{ marginBottom: 12 }}>¿Qué tratamiento querés realizarte?</div>
+
+      {services === null ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[0, 1].map(i => <div key={i} style={{ height: 84, borderRadius: 'var(--r)', background: 'var(--surface-2)', opacity: 0.6 + i * 0.15 }} />)}
+        </div>
+      ) : services.length === 0 ? (
+        <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>
+          No hay servicios disponibles en este momento.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {services.map(s => {
+            const isSel = selected?.id === s.id;
+            const free = (s.price ?? 0) === 0;
+            return (
+              <button key={s.id} onClick={() => onSelect(s)} className="card" style={{
+                padding: '15px 16px', textAlign: 'left', cursor: 'pointer', width: '100%',
+                border: isSel ? '2px solid var(--emerald)' : '1px solid var(--line)',
+                background: isSel ? 'var(--emerald-tint)' : 'var(--surface)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--ink)' }}>{s.name}</div>
+                    {s.description && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.45 }}>{s.description}</div>}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9, flexWrap: 'wrap' }}>
+                      <span className="chip chip--silver" style={{ fontSize: 11, padding: '3px 9px' }}>
+                        <Icon name="clock" size={11} /> {s.duration_min} min
+                      </span>
+                      <span className={`chip ${free ? 'chip--emerald' : 'chip--gold'}`} style={{ fontSize: 11, padding: '3px 9px' }}>
+                        {free ? 'Sin cargo' : fmtPrice(s.price)}
+                      </span>
+                      {(s.deposit_amount ?? 0) > 0 && (
+                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>Seña {fmtPrice(s.deposit_amount)}</span>
+                      )}
+                    </div>
+                  </div>
+                  <Icon name="chevR" size={17} color={isSel ? 'var(--emerald)' : 'var(--faint)'} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Step 2: profesional ─────────────────────────────────────────
+function ProfessionalPicker({ professionals, service, selected, onSelect }: {
+  professionals: Professional[] | null;
+  service: Service | null;
+  selected: Professional | null;
+  onSelect: (p: Professional) => void;
+}) {
+  return (
+    <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
+      <div className="field__label" style={{ marginBottom: 12 }}>
+        Profesionales que realizan {service ? `"${service.name}"` : 'este tratamiento'}
+      </div>
+
+      {professionals === null ? (
+        <div style={{ height: 76, borderRadius: 'var(--r)', background: 'var(--surface-2)', opacity: 0.7 }} />
+      ) : professionals.length === 0 ? (
+        <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>
+          No hay profesionales disponibles.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {professionals.map(p => {
+            const isSel = selected?.id === p.id;
+            return (
+              <button key={p.id} onClick={() => onSelect(p)} className="card" style={{
+                padding: '14px 16px', textAlign: 'left', cursor: 'pointer', width: '100%',
+                display: 'flex', alignItems: 'center', gap: 13,
+                border: isSel ? '2px solid var(--emerald)' : '1px solid var(--line)',
+                background: isSel ? 'var(--emerald-tint)' : 'var(--surface)',
+              }}>
+                <Avatar initials={p.initials} tone="emerald" size={44} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--ink)' }}>{p.name}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>{p.title}</div>
+                </div>
+                <Icon name="chevR" size={17} color={isSel ? 'var(--emerald)' : 'var(--faint)'} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Step 3: fecha y hora ────────────────────────────────────────
+function DateTimePicker({ service, onSelect }: { service: Service | null; onSelect: (v: { day: Day; time: string }) => void }) {
   const allDays = useMemo(() => genDays(120), []);
   const [startIdx, setStartIdx] = useState(0);
   const [selDay, setSelDay] = useState<Day | null>(null);
@@ -173,6 +272,7 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
   }, [selDay, selTime, onSelect]);
 
   const totalAvail = availableDays?.length ?? 0;
+  const free = (service?.price ?? 0) === 0;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
@@ -182,9 +282,9 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
           <Icon name="user" size={20} color="#fff" />
         </div>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--emerald)' }}>{SERVICE.name}</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--emerald)' }}>{service?.name ?? 'Consulta'}</div>
           <div style={{ fontSize: 12, color: 'var(--emerald)', opacity: .75, marginTop: 2 }}>
-            {SERVICE.duration_min} min · <span style={{ fontWeight: 600 }}>Online · Sin cargo</span>
+            {service?.duration_min ?? 30} min · <span style={{ fontWeight: 600 }}>{free ? 'Sin cargo' : fmtPrice(service!.price)}</span>
           </div>
         </div>
       </div>
@@ -274,8 +374,9 @@ function DateTimePicker({ onSelect }: { onSelect: (v: { day: Day; time: string }
   );
 }
 
-// ── Confirmation ────────────────────────────────────────────────
-function BookingConfirmation({ professional, day, time, sending, error, onConfirm }: {
+// ── Step 4: confirmación ────────────────────────────────────────
+function BookingConfirmation({ service, professional, day, time, sending, error, onConfirm }: {
+  service: Service;
   professional: Professional;
   day: Day;
   time: string;
@@ -287,6 +388,7 @@ function BookingConfirmation({ professional, day, time, sending, error, onConfir
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const canSubmit = name.trim() && email.trim() && phone.trim() && !sending;
+  const deposit = service.deposit_amount ?? 0;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
@@ -305,54 +407,73 @@ function BookingConfirmation({ professional, day, time, sending, error, onConfir
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Icon name="calendar" size={15} color="var(--muted)" />
             <span style={{ fontSize: 14, color: 'var(--ink)', fontWeight: 600 }}>
-              {day.dayName.charAt(0).toUpperCase() + day.dayName.slice(1)} {day.day} de {day.month} de 2026
+              {day.dayName.charAt(0).toUpperCase() + day.dayName.slice(1)} {day.day} de {day.month} de {day.date.getFullYear()}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Icon name="clock" size={15} color="var(--muted)" />
-            <span style={{ fontSize: 14, color: 'var(--ink)', fontWeight: 600 }}>{time} hs</span>
+            <span style={{ fontSize: 14, color: 'var(--ink)', fontWeight: 600 }}>{time} hs · {service.duration_min} min</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <Icon name="user" size={15} color="var(--muted)" />
-            <span style={{ fontSize: 14, color: 'var(--ink)' }}>{SERVICE.name}</span>
-            <span className="chip chip--emerald" style={{ padding: '3px 9px', fontSize: 11, marginLeft: 4 }}>Online</span>
+            <span style={{ fontSize: 14, color: 'var(--ink)' }}>{service.name}</span>
+            <span className="chip chip--emerald" style={{ padding: '3px 9px', fontSize: 11, marginLeft: 4 }}>
+              {(service.price ?? 0) === 0 ? 'Sin cargo' : fmtPrice(service.price)}
+            </span>
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
-        <div className="field">
-          <label className="field__label">Nombre y apellido</label>
-          <input className="input" placeholder="Ej. María González" autoComplete="name" value={name} onChange={e => setName(e.target.value)} />
+      {/* form real: permite que el navegador / celular autocomplete los datos */}
+      <form
+        onSubmit={e => { e.preventDefault(); if (canSubmit) onConfirm(name.trim(), email.trim(), phone.trim()); }}
+        autoComplete="on"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginBottom: 20 }}>
+          <div className="field">
+            <label className="field__label" htmlFor="bk-name">Nombre y apellido</label>
+            <input id="bk-name" name="name" className="input" placeholder="Ej. María González"
+              type="text" autoComplete="name" value={name} onChange={e => setName(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="bk-email">Email</label>
+            <input id="bk-email" name="email" className="input" placeholder="tu@email.com"
+              type="email" inputMode="email" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} required />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor="bk-phone">Teléfono</label>
+            <input id="bk-phone" name="tel" className="input" placeholder="+54 9 11 0000 0000"
+              type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} required />
+          </div>
         </div>
-        <div className="field">
-          <label className="field__label">Email</label>
-          <input className="input" type="email" placeholder="tu@email.com" autoComplete="email" value={email} onChange={e => setEmail(e.target.value)} />
-        </div>
-        <div className="field">
-          <label className="field__label">Teléfono</label>
-          <input className="input" type="tel" placeholder="+54 9 11 0000 0000" autoComplete="tel" value={phone} onChange={e => setPhone(e.target.value)} />
-        </div>
-      </div>
 
-      {error && (
-        <div style={{ padding: '12px 14px', borderRadius: 'var(--r-sm)', background: 'rgba(180,83,63,.08)', border: '1px solid rgba(180,83,63,.2)', color: 'var(--danger)', fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
-          {error}
-        </div>
-      )}
-      <button className="btn btn--primary btn--lg btn--block"
-        disabled={!canSubmit}
-        style={{ opacity: canSubmit ? 1 : .38 }}
-        onClick={() => onConfirm(name, email, phone)}>
-        <Icon name="check" size={18} color="#fff" stroke={2.5} />
-        {sending ? 'Confirmando…' : 'Confirmar turno'}
-      </button>
+        {deposit > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderRadius: 'var(--r-sm)', background: 'var(--gold-tint)', border: '1px solid var(--gold-soft)', marginBottom: 14 }}>
+            <Icon name="lock" size={16} color="var(--gold-deep)" />
+            <span style={{ fontSize: 13, color: 'var(--gold-deep)', lineHeight: 1.5 }}>
+              Para reservar tu lugar se abona una seña de <strong>{fmtPrice(deposit)}</strong> con Mercado Pago. Al confirmar te llevamos al pago seguro.
+            </span>
+          </div>
+        )}
+
+        {error && (
+          <div style={{ padding: '12px 14px', borderRadius: 'var(--r-sm)', background: 'rgba(180,83,63,.08)', border: '1px solid rgba(180,83,63,.2)', color: 'var(--danger)', fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
+            {error}
+          </div>
+        )}
+        <button type="submit" className="btn btn--primary btn--lg btn--block"
+          disabled={!canSubmit}
+          style={{ opacity: canSubmit ? 1 : .38 }}>
+          <Icon name="check" size={18} color="#fff" stroke={2.5} />
+          {sending ? 'Confirmando…' : deposit > 0 ? 'Confirmar y pagar seña' : 'Confirmar turno'}
+        </button>
+      </form>
     </div>
   );
 }
 
 // ── Success screen ───────────────────────────────────────────────
-function BookingSuccess({ day, time, onClose }: { day: Day; time: string; onClose: () => void }) {
+function BookingSuccess({ service, day, time, onClose }: { service: Service; day: Day; time: string; onClose: () => void }) {
   return (
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 28px', textAlign: 'center' }}>
       <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--emerald-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
@@ -362,7 +483,7 @@ function BookingSuccess({ day, time, onClose }: { day: Day; time: string; onClos
         ¡Turno confirmado!
       </div>
       <div style={{ fontSize: 15, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 280 }}>
-        Tu consulta online de piel quedó agendada para el
+        Tu {service.name.toLowerCase()} quedó agendada para el
         <strong style={{ color: 'var(--ink)' }}> {day.dayName} {day.day} de {day.month}</strong> a las
         <strong style={{ color: 'var(--ink)' }}> {time} hs</strong>.
       </div>
@@ -384,19 +505,39 @@ interface BookingFlowProps {
 
 export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
   const [step, setStep] = useState(1);
-  const professional: Professional = { id: 'p1', name: 'Dra. Valentina Calvo', title: 'Médica', initials: 'VC', bio: null };
+  const [services, setServices] = useState<Service[] | null>(null);
+  const [professionals, setProfessionals] = useState<Professional[] | null>(null);
+  const [service, setService] = useState<Service | null>(null);
+  const [professional, setProfessional] = useState<Professional | null>(null);
   const [datetime, setDatetime] = useState<{ day: Day; time: string } | null>(null);
   const [sending, setSending] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
+  useEffect(() => {
+    Promise.all([
+      supabase.from('services')
+        .select('id, name, category, description, price, duration_min, deposit_amount, active')
+        .eq('active', true).order('name'),
+      supabase.from('professionals').select('id, name, title, initials, bio').order('name'),
+    ]).then(([svcRes, profRes]) => {
+      setServices((svcRes.data as Service[]) ?? []);
+      setProfessionals((profRes.data as Professional[]) ?? []);
+    });
+  }, []);
+
   const onConfirm = async (name: string, email: string, phone: string) => {
+    if (!service || !professional || !datetime) return;
     setSending(true);
     setBookingError(null);
     try {
       const res = await fetch('/api/booking', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, phone, day: datetime?.day, time: datetime?.time }),
+        body: JSON.stringify({
+          name, email, phone,
+          day: datetime.day, time: datetime.time,
+          service_id: service.id, professional_id: professional.id,
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -415,7 +556,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
       return;
     }
     setSending(false);
-    setStep(3);
+    setStep(5);
     onSuccess?.();
   };
 
@@ -427,24 +568,44 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
           <Icon name="x" size={18} />
         </button>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Avatar initials={professional.initials} tone="emerald" size={34} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {professional.name}
+          {professional ? (
+            <>
+              <Avatar initials={professional.initials} tone="emerald" size={34} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {professional.name}
+                </div>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--gold)', letterSpacing: '.08em', textTransform: 'uppercase' as const }}>
+                  NUEVO TURNO
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)' }}>Stemia</div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--gold)', letterSpacing: '.08em', textTransform: 'uppercase' as const }}>
+                NUEVO TURNO
+              </div>
             </div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--gold)', letterSpacing: '.08em', textTransform: 'uppercase' as const }}>
-              NUEVO TURNO
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {step < 3 && <StepIndicator step={step} />}
+      {step < 5 && <StepIndicator step={step} />}
 
       <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {step === 1 && <DateTimePicker onSelect={setDatetime} />}
-        {step === 2 && datetime && (
+        {step === 1 && (
+          <ServicePicker services={services} selected={service}
+            onSelect={s => { setService(s); setStep(2); }} />
+        )}
+        {step === 2 && (
+          <ProfessionalPicker professionals={professionals} service={service} selected={professional}
+            onSelect={p => { setProfessional(p); setStep(3); }} />
+        )}
+        {step === 3 && <DateTimePicker service={service} onSelect={setDatetime} />}
+        {step === 4 && service && professional && datetime && (
           <BookingConfirmation
+            service={service}
             professional={professional}
             day={datetime.day}
             time={datetime.time}
@@ -453,23 +614,33 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
             onConfirm={onConfirm}
           />
         )}
-        {step === 3 && datetime && (
-          <BookingSuccess day={datetime.day} time={datetime.time} onClose={onClose} />
+        {step === 5 && service && datetime && (
+          <BookingSuccess service={service} day={datetime.day} time={datetime.time} onClose={onClose} />
         )}
       </div>
 
       {/* Bottom bar */}
-      {step === 1 && (
-        <div style={{ padding: '12px 20px calc(12px + var(--safe-bottom))', borderTop: '1px solid var(--line)', background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
-          <button className="btn btn--primary btn--block" onClick={() => setStep(2)}
-            disabled={!datetime} style={{ opacity: datetime ? 1 : .38 }}>
+      {step === 2 && (
+        <div style={{ padding: '8px 20px calc(8px + var(--safe-bottom))', borderTop: '1px solid var(--line)', background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
+          <button className="btn btn--ghost btn--block" style={{ fontSize: 13 }} onClick={() => setStep(1)}>
+            <Icon name="chevL" size={15} /> Cambiar servicio
+          </button>
+        </div>
+      )}
+      {step === 3 && (
+        <div style={{ padding: '12px 20px calc(12px + var(--safe-bottom))', borderTop: '1px solid var(--line)', background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(12px)', flexShrink: 0, display: 'flex', gap: 10 }}>
+          <button className="btn btn--ghost" style={{ fontSize: 13 }} onClick={() => { setDatetime(null); setStep(2); }}>
+            <Icon name="chevL" size={15} /> Volver
+          </button>
+          <button className="btn btn--primary" style={{ flex: 1 }} onClick={() => setStep(4)}
+            disabled={!datetime}>
             Continuar <Icon name="chevR" size={16} color="#fff" />
           </button>
         </div>
       )}
-      {step === 2 && (
+      {step === 4 && (
         <div style={{ padding: '8px 20px calc(8px + var(--safe-bottom))', borderTop: '1px solid var(--line)', background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(12px)', flexShrink: 0 }}>
-          <button className="btn btn--ghost btn--block" style={{ fontSize: 13 }} onClick={() => setStep(1)}>
+          <button className="btn btn--ghost btn--block" style={{ fontSize: 13 }} onClick={() => setStep(3)}>
             <Icon name="chevL" size={15} /> Cambiar fecha u horario
           </button>
         </div>

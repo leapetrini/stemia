@@ -138,6 +138,9 @@ textarea.input { resize: none; line-height: 1.5; }
 
 /* Landing */
 .lhost { position: relative; min-height: 100vh; background: var(--bg-tint); }
+/* El hero llena el alto de la pantalla (sin franja blanca vacía abajo en móvil) */
+.lscroll { display: flex; flex-direction: column; min-height: 100dvh; }
+.lscroll .lhero--tall { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .ltopbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; background: rgba(250,249,246,.72); backdrop-filter: blur(16px) saturate(160%); transition: background .3s; }
 .ltopbar--onmarble { background: transparent; }
 .ltopbar--dark .lbrand__name, .ltopbar--onmarble.ltopbar--dark .lbrand__name { color: #fff; }

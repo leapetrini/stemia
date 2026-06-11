@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { NewAppointmentModal } from '@/components/panel/NewAppointmentModal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 const ALL_SLOTS = [
   '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
@@ -62,6 +63,7 @@ export default function AgendaPage() {
   const [showNew, setShowNew] = useState(false);
   const [newDefaultSlot, setNewDefaultSlot] = useState<string | undefined>(undefined);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ appt: AppointmentRow; status: 'completado' | 'ausente' } | null>(null);
 
   const fetchAppointments = (date: string) => {
     setLoading(true);
@@ -88,6 +90,7 @@ export default function AgendaPage() {
       if (!error) setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
     }
     setUpdatingId(null);
+    setConfirmAction(null);
   };
 
   const openNew = (slot?: string) => {
@@ -241,14 +244,14 @@ export default function AgendaPage() {
                             <button
                               title="Vino"
                               disabled={!!isUpdating}
-                              onClick={() => handleStatusChange(appt.id, 'completado')}
+                              onClick={() => setConfirmAction({ appt, status: 'completado' })}
                               style={{ width: 32, height: 32, borderRadius: 9, border: '1.5px solid var(--emerald)', background: 'var(--emerald-tint)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Icon name="check" size={15} color="var(--emerald)" stroke={2.2} />
                             </button>
                             <button
                               title="No vino"
                               disabled={!!isUpdating}
-                              onClick={() => handleStatusChange(appt.id, 'ausente')}
+                              onClick={() => setConfirmAction({ appt, status: 'ausente' })}
                               style={{ width: 32, height: 32, borderRadius: 9, border: '1.5px solid var(--danger)', background: 'rgba(180,83,63,.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <Icon name="x" size={15} color="var(--danger)" stroke={2.2} />
                             </button>
@@ -280,6 +283,31 @@ export default function AgendaPage() {
         )}
       </div>
     </div>
+
+    {confirmAction && (
+      confirmAction.status === 'completado' ? (
+        <ConfirmDialog
+          title="Confirmar asistencia"
+          message={`¿Marcar el turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs como "Vino"?`}
+          confirmLabel="Sí, vino"
+          tone="emerald"
+          icon="check"
+          loading={updatingId === confirmAction.appt.id}
+          onConfirm={() => handleStatusChange(confirmAction.appt.id, 'completado')}
+          onClose={() => setConfirmAction(null)}
+        />
+      ) : (
+        <ConfirmDialog
+          title="Marcar como no vino"
+          message={`El turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs se eliminará de la agenda. Esta acción no se puede deshacer.`}
+          confirmLabel="Sí, eliminar"
+          tone="danger"
+          loading={updatingId === confirmAction.appt.id}
+          onConfirm={() => handleStatusChange(confirmAction.appt.id, 'ausente')}
+          onClose={() => setConfirmAction(null)}
+        />
+      )
+    )}
 
     {showNew && (
       <NewAppointmentModal

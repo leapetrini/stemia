@@ -18,6 +18,7 @@ export interface Service {
   description: string;
   price: number;
   duration_min: number;
+  deposit_amount: number;
   active: boolean;
 }
 
