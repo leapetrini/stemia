@@ -121,7 +121,7 @@ function ServicePicker({ services, selected, onSelect }: {
             const isSel = selected?.id === s.id;
             const free = (s.price ?? 0) === 0;
             return (
-              <button key={s.id} onClick={() => onSelect(s)} className="card" style={{
+              <button key={s.id} onClick={() => onSelect(s)} className="card card--press" style={{
                 padding: '15px 16px', textAlign: 'left', cursor: 'pointer', width: '100%',
                 border: isSel ? '2px solid var(--emerald)' : '1px solid var(--line)',
                 background: isSel ? 'var(--emerald-tint)' : 'var(--surface)',
@@ -137,7 +137,7 @@ function ServicePicker({ services, selected, onSelect }: {
                       <span className={`chip ${free ? 'chip--emerald' : 'chip--gold'}`} style={{ fontSize: 11, padding: '3px 9px' }}>
                         {free ? 'Sin cargo' : fmtPrice(s.price)}
                       </span>
-                      {(s.deposit_amount ?? 0) > 0 && (
+                      {!free && (s.deposit_amount ?? 0) > 0 && (
                         <span style={{ fontSize: 11, color: 'var(--muted)' }}>Seña {fmtPrice(s.deposit_amount)}</span>
                       )}
                     </div>
@@ -177,7 +177,7 @@ function ProfessionalPicker({ professionals, service, selected, onSelect }: {
           {professionals.map(p => {
             const isSel = selected?.id === p.id;
             return (
-              <button key={p.id} onClick={() => onSelect(p)} className="card" style={{
+              <button key={p.id} onClick={() => onSelect(p)} className="card card--press" style={{
                 padding: '14px 16px', textAlign: 'left', cursor: 'pointer', width: '100%',
                 display: 'flex', alignItems: 'center', gap: 13,
                 border: isSel ? '2px solid var(--emerald)' : '1px solid var(--line)',
@@ -388,7 +388,8 @@ function BookingConfirmation({ service, professional, day, time, sending, error,
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const canSubmit = name.trim() && email.trim() && phone.trim() && !sending;
-  const deposit = service.deposit_amount ?? 0;
+  // Servicio sin cargo: nunca se muestra ni se cobra seña
+  const deposit = (service.price ?? 0) > 0 ? (service.deposit_amount ?? 0) : 0;
 
   return (
     <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px 24px' }}>
@@ -593,7 +594,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
 
       {step < 5 && <StepIndicator step={step} />}
 
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      <div key={step} className="step-anim" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {step === 1 && (
           <ServicePicker services={services} selected={service}
             onSelect={s => { setService(s); setStep(2); }} />

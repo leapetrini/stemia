@@ -67,13 +67,13 @@ export function PatientModal({ patient, onSave, onClose }: Props) {
   };
 
   return (
-    <div style={{
+    <div className="anim-overlay" style={{
       position: 'fixed', inset: 0, zIndex: 200,
       background: 'rgba(28,24,16,.45)', backdropFilter: 'blur(4px)',
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       padding: '0',
     }} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{
+      <div className="anim-sheet" style={{
         width: '100%', maxWidth: 520, background: 'var(--surface)',
         borderRadius: '20px 20px 0 0', padding: '0 0 env(safe-area-inset-bottom)',
         maxHeight: '92dvh', overflow: 'auto',

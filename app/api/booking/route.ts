@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   // 1. Obtener professional y service de la DB (validados por id si vienen
   // del flujo nuevo; fallback al único servicio/profesional si no)
   const profQuery = supabaseAdmin.from('professionals').select('id, name');
-  const svcQuery = supabaseAdmin.from('services').select('id, name, duration_min, deposit_amount').eq('active', true);
+  const svcQuery = supabaseAdmin.from('services').select('id, name, price, duration_min, deposit_amount').eq('active', true);
 
   const [profRes, svcRes] = await Promise.all([
     (professional_id ? profQuery.eq('id', professional_id) : profQuery).limit(1).single(),
@@ -30,8 +30,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'El servicio o profesional seleccionado no está disponible' }, { status: 400 });
   }
 
+  // Los servicios sin cargo (precio 0) nunca piden seña: reserva directa
+  const servicePrice = Number(svcRes.data.price ?? 0);
   const depositAmount = Number(svcRes.data.deposit_amount ?? 0);
-  const requiresDeposit = depositAmount > 0 && isMercadoPagoEnabled();
+  const requiresDeposit = servicePrice > 0 && depositAmount > 0 && isMercadoPagoEnabled();
 
   // 2. Buscar o crear paciente por email
   let patientId: string;

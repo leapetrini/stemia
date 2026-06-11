@@ -100,10 +100,11 @@ export function NewAppointmentModal({ date, defaultSlot, onSave, onClose }: Prop
 
   return (
     <div
+      className="anim-overlay"
       style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(28,24,16,.45)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: '100%', maxWidth: 520, background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '92dvh', overflow: 'auto' }}>
+      <div className="anim-sheet" style={{ width: '100%', maxWidth: 520, background: 'var(--surface)', borderRadius: '20px 20px 0 0', maxHeight: '92dvh', overflow: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 12 }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--line)' }} />
         </div>
