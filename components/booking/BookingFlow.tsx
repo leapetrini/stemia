@@ -398,11 +398,16 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, phone, day: datetime?.day, time: datetime?.time }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setSending(false);
         setBookingError(data.error ?? 'Ocurrió un error. Por favor intentá de nuevo.');
         return;
+      }
+      // Servicio con seña: la API devuelve la URL del checkout de Mercado Pago
+      if (data.init_point) {
+        window.location.href = data.init_point;
+        return; // se mantiene "Confirmando…" hasta que el navegador navega
       }
     } catch (_) {
       setSending(false);
