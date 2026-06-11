@@ -1,8 +1,8 @@
 // Imagen de vista previa al compartir el link (WhatsApp, Instagram, redes).
-// Next.js la sirve automáticamente y agrega las etiquetas og:image.
+// Solo la S del logo (la misma del favicon), en vector, centrada y sutil.
 import { ImageResponse } from 'next/og';
 
-export const alt = 'Stemia · Medicina estética · Neuquén Capital';
+export const alt = 'Stemia · Medicina estética';
 export const size = { width: 1200, height: 630 };
 export const contentType = 'image/png';
 
@@ -14,40 +14,21 @@ export default function OgImage() {
           width: '100%',
           height: '100%',
           display: 'flex',
-          flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
           backgroundColor: '#1c1810',
-          position: 'relative',
         }}
       >
-        {/* marco dorado fino */}
-        <div
-          style={{
-            position: 'absolute',
-            top: 30,
-            left: 30,
-            right: 30,
-            bottom: 30,
-            border: '2px solid rgba(185,151,79,.55)',
-            borderRadius: 26,
-            display: 'flex',
-          }}
-        />
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ width: 70, height: 2, backgroundColor: '#b9974f', marginBottom: 40, display: 'flex' }} />
-          <div style={{ fontSize: 27, letterSpacing: '.4em', marginLeft: '.4em', color: '#c4a96e', display: 'flex' }}>
-            MEDICINA ESTÉTICA
-          </div>
-          <div style={{ fontSize: 126, fontWeight: 500, letterSpacing: '.3em', marginLeft: '.3em', color: '#ffffff', marginTop: 16, display: 'flex' }}>
-            STEMIA
-          </div>
-          <div style={{ fontSize: 27, color: 'rgba(255,255,255,.68)', marginTop: 30, display: 'flex' }}>
-            Neuquén Capital · Reservá tu consulta online
-          </div>
-          <div style={{ width: 70, height: 2, backgroundColor: '#b9974f', marginTop: 40, display: 'flex' }} />
-        </div>
+        <svg width="230" height="230" viewBox="0 0 48 48" fill="none">
+          <rect width="48" height="48" rx="12" fill="#1c1810" />
+          <rect x="3" y="3" width="42" height="42" rx="11" stroke="#b9974f" strokeWidth="1.3" opacity="0.9" />
+          <path
+            d="M30.5 17.5c-1.2-1.8-3.4-2.9-6-2.9-3.4 0-6 1.9-6 4.6 0 6 12.5 3.4 12.5 9.6 0 2.9-2.8 4.9-6.5 4.9-2.9 0-5.4-1.2-6.7-3.2"
+            stroke="#ffffff"
+            strokeWidth="2.4"
+            strokeLinecap="round"
+          />
+        </svg>
       </div>
     ),
     { ...size }
