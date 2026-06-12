@@ -259,19 +259,7 @@ export default function AgendaPage() {
                         )}
                       </div>
                     ) : (
-                      <button
-                        onClick={() => openNew(slot)}
-                        style={{
-                          width: '100%', height: 40, borderRadius: 10,
-                          border: '1.5px dashed var(--line)',
-                          background: 'transparent', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                          color: 'var(--faint)', fontSize: 12.5,
-                          transition: 'border-color .15s, background .15s',
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--emerald)'; e.currentTarget.style.background = 'var(--emerald-tint)'; e.currentTarget.style.color = 'var(--emerald)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = ''; e.currentTarget.style.background = ''; e.currentTarget.style.color = ''; }}
-                      >
+                      <button className="slot-free" onClick={() => openNew(slot)}>
                         <Icon name="plus" size={13} color="currentColor" /> Disponible
                       </button>
                     )}

@@ -23,6 +23,14 @@ type ClinicalNote = {
   id: string;
   date: string;
   content: string;
+  treatment: string | null;
+  created_at: string;
+};
+
+type ClinicalPhoto = {
+  id: string;
+  date: string;
+  path: string;
   created_at: string;
 };
 
@@ -74,9 +82,38 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const [addingNote, setAddingNote] = useState(false);
   const [noteDate, setNoteDate] = useState(toLocalISO(new Date()));
   const [noteText, setNoteText] = useState('');
+  const [noteTreatment, setNoteTreatment] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Fotos clínicas por consulta
+  const [photos, setPhotos] = useState<ClinicalPhoto[]>([]);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [uploadingDate, setUploadingDate] = useState<string | null>(null);
+  const [confirmPhoto, setConfirmPhoto] = useState<ClinicalPhoto | null>(null);
+  const [deletingPhotoId, setDeletingPhotoId] = useState<string | null>(null);
+
+  const loadPhotos = async () => {
+    const { data } = await supabase
+      .from('clinical_photos')
+      .select('id, date, path, created_at')
+      .eq('patient_id', id)
+      .order('created_at');
+    const rows = (data as ClinicalPhoto[]) ?? [];
+    setPhotos(rows);
+    if (rows.length > 0) {
+      // bucket privado: se accede con URLs firmadas con vencimiento
+      const { data: signed } = await supabase.storage
+        .from('clinical-photos')
+        .createSignedUrls(rows.map(p => p.path), 3600);
+      const map: Record<string, string> = {};
+      signed?.forEach((s, i) => { if (s.signedUrl) map[rows[i].id] = s.signedUrl; });
+      setPhotoUrls(map);
+    } else {
+      setPhotoUrls({});
+    }
+  };
 
   useEffect(() => {
     Promise.all([
@@ -96,18 +133,42 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
       setNotes((notesRes.data as ClinicalNote[]) ?? []);
       setLoading(false);
     });
+    loadPhotos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const handlePhotoUpload = async (date: string, file: File) => {
+    setUploadingDate(date);
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const path = `${id}/${date}/${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from('clinical-photos').upload(path, file);
+    if (!upErr) {
+      await supabase.from('clinical_photos').insert({ patient_id: id, date, path });
+      await loadPhotos();
+    }
+    setUploadingDate(null);
+  };
+
+  const handleDeletePhoto = async (photo: ClinicalPhoto) => {
+    setDeletingPhotoId(photo.id);
+    await supabase.storage.from('clinical-photos').remove([photo.path]);
+    await supabase.from('clinical_photos').delete().eq('id', photo.id);
+    setPhotos(prev => prev.filter(p => p.id !== photo.id));
+    setDeletingPhotoId(null);
+    setConfirmPhoto(null);
+  };
 
   const handleSaveNote = async () => {
     if (!noteText.trim()) return;
     setSavingNote(true);
     const { data, error } = await supabase
       .from('clinical_notes')
-      .insert({ patient_id: id, date: noteDate, content: noteText.trim() })
+      .insert({ patient_id: id, date: noteDate, content: noteText.trim(), treatment: noteTreatment.trim() || null })
       .select().single();
     if (!error && data) {
       setNotes(prev => [data as ClinicalNote, ...prev].sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at)));
       setNoteText('');
+      setNoteTreatment('');
       setNoteDate(toLocalISO(new Date()));
       setAddingNote(false);
     }
@@ -133,10 +194,11 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const joinDate = new Date(patient.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
   const today = toLocalISO(new Date());
 
-  // Timeline: all unique dates across notes + appointments
+  // Timeline: all unique dates across notes + appointments + photos
   const allDates = [...new Set([
     ...notes.map(n => n.date),
     ...appointments.map(a => a.date),
+    ...photos.map(p => p.date),
   ])].sort().reverse();
 
   return (
@@ -240,19 +302,6 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
               </div>
             </div>
 
-            <div className="card" style={{ padding: '16px 18px' }}>
-              <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: 'var(--faint)', textTransform: 'uppercase' }}>Fotos clínicas</p>
-              <p style={{ margin: '0 0 14px', fontSize: 12, color: 'var(--muted)' }}>Antes · Después</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {['Antes', 'Después'].map(label => (
-                  <div key={label} style={{ aspectRatio: '3/4', background: 'var(--surface-2)', borderRadius: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, border: '1.5px dashed var(--line)', cursor: 'pointer' }}>
-                    <Icon name="camera" size={22} color="var(--faint)" />
-                    <span style={{ fontSize: 12, color: 'var(--faint)', fontWeight: 600 }}>{label}</span>
-                    <span style={{ fontSize: 10, color: 'var(--faint)' }}>Agregar foto</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
@@ -265,7 +314,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
               <div className="card" style={{ padding: '16px 18px', marginBottom: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>Nueva evolución</span>
-                  <button onClick={() => { setAddingNote(false); setNoteText(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
+                  <button onClick={() => { setAddingNote(false); setNoteText(''); setNoteTreatment(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
                     <Icon name="x" size={18} color="var(--muted)" />
                   </button>
                 </div>
@@ -273,6 +322,11 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                   <div>
                     <label className="form-label">Fecha</label>
                     <input className="input" type="date" value={noteDate} onChange={e => setNoteDate(e.target.value)} max={today} />
+                  </div>
+                  <div>
+                    <label className="form-label">Tratamiento realizado (opcional)</label>
+                    <input className="input" value={noteTreatment} onChange={e => setNoteTreatment(e.target.value)}
+                      placeholder="Ej. Limpieza facial profunda, peeling…" />
                   </div>
                   <div>
                     <label className="form-label">Evolución / observaciones</label>
@@ -286,7 +340,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                     />
                   </div>
                   <div style={{ display: 'flex', gap: 10 }}>
-                    <button className="btn btn--outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setAddingNote(false); setNoteText(''); }}>
+                    <button className="btn btn--outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setAddingNote(false); setNoteText(''); setNoteTreatment(''); }}>
                       Cancelar
                     </button>
                     <button className="btn btn--gold" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSaveNote} disabled={savingNote || !noteText.trim()}>
@@ -355,6 +409,11 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                                 <Icon name="file" size={14} color="var(--emerald)" />
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
+                                {note.treatment && (
+                                  <span className="chip chip--gold" style={{ fontSize: 11, padding: '3px 9px', marginBottom: 7 }}>
+                                    {note.treatment}
+                                  </span>
+                                )}
                                 <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{note.content}</p>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
                                   <span style={{ fontSize: 11, color: 'var(--faint)' }}>
@@ -373,6 +432,56 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                             </div>
                           </div>
                         ))}
+
+                        {/* Fotos de esta consulta */}
+                        {(() => {
+                          const datePhotos = photos.filter(p => p.date === date);
+                          return (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                              {datePhotos.map(ph => (
+                                <div key={ph.id} style={{ position: 'relative', width: 84, height: 84 }}>
+                                  {photoUrls[ph.id] ? (
+                                    <a href={photoUrls[ph.id]} target="_blank" rel="noreferrer">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img src={photoUrls[ph.id]} alt="Foto clínica"
+                                        style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--line)', display: 'block' }} />
+                                    </a>
+                                  ) : (
+                                    <div style={{ width: 84, height: 84, borderRadius: 10, background: 'var(--surface-2)' }} />
+                                  )}
+                                  <button
+                                    onClick={() => setConfirmPhoto(ph)}
+                                    title="Eliminar foto"
+                                    style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh-sm)' }}>
+                                    <Icon name="x" size={11} color="var(--muted)" />
+                                  </button>
+                                </div>
+                              ))}
+                              {/* agregar foto a esta consulta */}
+                              <label htmlFor={`photo-input-${date}`} style={{
+                                width: 84, height: 84, borderRadius: 10, border: '1.5px dashed var(--line)',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                                cursor: uploadingDate === date ? 'wait' : 'pointer', color: 'var(--faint)',
+                                opacity: uploadingDate === date ? 0.5 : 1,
+                              }}>
+                                <Icon name="camera" size={18} color="var(--faint)" />
+                                <span style={{ fontSize: 10, fontWeight: 600 }}>{uploadingDate === date ? 'Subiendo…' : 'Foto'}</span>
+                                <input
+                                  id={`photo-input-${date}`}
+                                  type="file"
+                                  accept="image/*"
+                                  style={{ display: 'none' }}
+                                  disabled={uploadingDate === date}
+                                  onChange={e => {
+                                    const f = e.target.files?.[0];
+                                    if (f) handlePhotoUpload(date, f);
+                                    e.target.value = '';
+                                  }}
+                                />
+                              </label>
+                            </div>
+                          );
+                        })()}
 
                         {/* Si solo hay turno (sin nota) y es pasado, sugerir agregar nota */}
                         {dateAppt && dateNotes.length === 0 && isPast && (
@@ -471,6 +580,18 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
         loading={deletingId === confirmDeleteId}
         onConfirm={() => handleDeleteNote(confirmDeleteId)}
         onClose={() => setConfirmDeleteId(null)}
+      />
+    )}
+
+    {confirmPhoto && (
+      <ConfirmDialog
+        title="Eliminar foto clínica"
+        message="La foto se eliminará definitivamente de la historia clínica. Esta acción no se puede deshacer."
+        confirmLabel="Sí, eliminar"
+        tone="danger"
+        loading={deletingPhotoId === confirmPhoto.id}
+        onConfirm={() => handleDeletePhoto(confirmPhoto)}
+        onClose={() => setConfirmPhoto(null)}
       />
     )}
 

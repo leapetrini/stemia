@@ -139,6 +139,19 @@ textarea.input { resize: none; line-height: 1.5; }
 .anim-sheet { animation: sheetIn .3s cubic-bezier(.2,.9,.25,1); }
 .step-anim { animation: stepIn .22s ease; }
 
+/* Slot libre en la agenda (hover solo con mouse, sin flashes en touch) */
+.slot-free {
+  width: 100%; height: 40px; border-radius: 10px;
+  border: 1.5px dashed var(--line); background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  color: var(--faint); font-size: 12.5px; font-family: var(--sans);
+  transition: border-color .15s, background .15s, color .15s;
+}
+@media (hover: hover) {
+  .slot-free:hover { border-color: var(--emerald); background: var(--emerald-tint); color: var(--emerald); }
+}
+.slot-free:active { background: var(--emerald-tint); color: var(--emerald); }
+
 /* Tarjetas clickeables (servicios, profesionales, turnos) */
 .card--press { transition: transform .16s ease, box-shadow .2s ease, border-color .16s ease, background .16s ease; }
 @media (hover: hover) {
