@@ -44,7 +44,7 @@ export function PatientModal({ patient, onSave, onClose }: Props) {
 
     const payload = {
       name: name.trim(),
-      email: email.trim() || null,
+      email: email.trim().toLowerCase() || null,
       phone: phone.trim() || null,
       age: age ? parseInt(age) : null,
       skin_type: skinType || null,

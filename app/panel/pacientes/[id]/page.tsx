@@ -78,14 +78,20 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const [tab, setTab] = useState<'info' | 'historia' | 'consentimiento'>('info');
   const [editing, setEditing] = useState(false);
 
-  // Historia clínica form
-  const [addingNote, setAddingNote] = useState(false);
-  const [noteDate, setNoteDate] = useState(toLocalISO(new Date()));
+  // Composer de evolución: se abre dentro de un turno (pickable=false, fecha fija)
+  // o como anotación suelta desde arriba (pickable=true, con selector de fecha).
+  const [composer, setComposer] = useState<{ date: string; pickable: boolean } | null>(null);
   const [noteText, setNoteText] = useState('');
   const [noteTreatment, setNoteTreatment] = useState('');
   const [savingNote, setSavingNote] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  // Edición de una evolución ya guardada
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [editTreatment, setEditTreatment] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Fotos clínicas por consulta
   const [photos, setPhotos] = useState<ClinicalPhoto[]>([]);
@@ -158,21 +164,54 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
     setConfirmPhoto(null);
   };
 
+  const openComposer = (date: string, pickable = false) => {
+    setEditingId(null);
+    setComposer({ date, pickable });
+    setNoteText('');
+    setNoteTreatment('');
+  };
+
+  const closeComposer = () => {
+    setComposer(null);
+    setNoteText('');
+    setNoteTreatment('');
+  };
+
   const handleSaveNote = async () => {
-    if (!noteText.trim()) return;
+    if (!composer || !noteText.trim()) return;
     setSavingNote(true);
     const { data, error } = await supabase
       .from('clinical_notes')
-      .insert({ patient_id: id, date: noteDate, content: noteText.trim(), treatment: noteTreatment.trim() || null })
+      .insert({ patient_id: id, date: composer.date, content: noteText.trim(), treatment: noteTreatment.trim() || null })
       .select().single();
     if (!error && data) {
       setNotes(prev => [data as ClinicalNote, ...prev].sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at)));
-      setNoteText('');
-      setNoteTreatment('');
-      setNoteDate(toLocalISO(new Date()));
-      setAddingNote(false);
+      closeComposer();
     }
     setSavingNote(false);
+  };
+
+  const startEdit = (note: ClinicalNote) => {
+    setComposer(null);
+    setEditingId(note.id);
+    setEditText(note.content);
+    setEditTreatment(note.treatment ?? '');
+  };
+
+  const handleUpdateNote = async () => {
+    if (!editingId || !editText.trim()) return;
+    setSavingEdit(true);
+    const { data, error } = await supabase
+      .from('clinical_notes')
+      .update({ content: editText.trim(), treatment: editTreatment.trim() || null })
+      .eq('id', editingId).select().single();
+    if (!error && data) {
+      setNotes(prev => prev.map(n => n.id === editingId ? (data as ClinicalNote) : n));
+      setEditingId(null);
+      setEditText('');
+      setEditTreatment('');
+    }
+    setSavingEdit(false);
   };
 
   const handleDeleteNote = async (noteId: string) => {
@@ -200,6 +239,67 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
     ...appointments.map(a => a.date),
     ...photos.map(p => p.date),
   ])].sort().reverse();
+
+  const iconBtnStyle: React.CSSProperties = {
+    background: 'none', border: 'none', cursor: 'pointer', padding: 3,
+    display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6,
+  };
+
+  // Formulario para escribir una evolución (inline en un turno o suelta).
+  const renderComposer = (showDatePicker: boolean) => (
+    <div className="card" style={{ padding: '14px 16px', border: '1.5px solid var(--emerald)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {showDatePicker && (
+          <div>
+            <label className="form-label">Fecha</label>
+            <input className="input" type="date" value={composer?.date ?? today} max={today}
+              onChange={e => setComposer(c => (c ? { ...c, date: e.target.value } : c))} />
+          </div>
+        )}
+        <div>
+          <label className="form-label">Tratamiento realizado (opcional)</label>
+          <input className="input" value={noteTreatment} onChange={e => setNoteTreatment(e.target.value)}
+            placeholder="Ej. Limpieza facial profunda, peeling…" />
+        </div>
+        <div>
+          <label className="form-label">Evolución / observaciones</label>
+          <textarea className="input" value={noteText} onChange={e => setNoteText(e.target.value)}
+            placeholder="Escribí la evolución, observaciones, indicaciones…" rows={5}
+            style={{ resize: 'vertical', lineHeight: 1.6 }} />
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn--outline" style={{ flex: 1, justifyContent: 'center' }} onClick={closeComposer}>Cancelar</button>
+          <button className="btn btn--gold" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSaveNote} disabled={savingNote || !noteText.trim()}>
+            {savingNote ? 'Guardando…' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Formulario para editar una evolución existente.
+  const renderEditForm = () => (
+    <div className="card" style={{ padding: '14px 16px', border: '1.5px solid var(--emerald)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div>
+          <label className="form-label">Tratamiento realizado (opcional)</label>
+          <input className="input" value={editTreatment} onChange={e => setEditTreatment(e.target.value)}
+            placeholder="Ej. Limpieza facial profunda, peeling…" />
+        </div>
+        <div>
+          <label className="form-label">Evolución / observaciones</label>
+          <textarea className="input" value={editText} onChange={e => setEditText(e.target.value)}
+            rows={5} style={{ resize: 'vertical', lineHeight: 1.6 }} />
+        </div>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn--outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setEditingId(null); setEditText(''); setEditTreatment(''); }}>Cancelar</button>
+          <button className="btn btn--gold" style={{ flex: 1, justifyContent: 'center' }} onClick={handleUpdateNote} disabled={savingEdit || !editText.trim()}>
+            {savingEdit ? 'Guardando…' : 'Guardar cambios'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -305,193 +405,159 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
-        {/* HISTORIA CLÍNICA TAB */}
+        {/* HISTORIA CLÍNICA TAB — una tarjeta por turno (evento) */}
         {tab === 'historia' && (
           <div style={{ marginTop: 16 }}>
 
-            {/* Formulario nueva evolución */}
-            {addingNote ? (
-              <div className="card" style={{ padding: '16px 18px', marginBottom: 16 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>Nueva evolución</span>
-                  <button onClick={() => { setAddingNote(false); setNoteText(''); setNoteTreatment(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2 }}>
-                    <Icon name="x" size={18} color="var(--muted)" />
-                  </button>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div>
-                    <label className="form-label">Fecha</label>
-                    <input className="input" type="date" value={noteDate} onChange={e => setNoteDate(e.target.value)} max={today} />
-                  </div>
-                  <div>
-                    <label className="form-label">Tratamiento realizado (opcional)</label>
-                    <input className="input" value={noteTreatment} onChange={e => setNoteTreatment(e.target.value)}
-                      placeholder="Ej. Limpieza facial profunda, peeling…" />
-                  </div>
-                  <div>
-                    <label className="form-label">Evolución / observaciones</label>
-                    <textarea
-                      className="input"
-                      value={noteText}
-                      onChange={e => setNoteText(e.target.value)}
-                      placeholder="Escribí aquí la evolución clínica, tratamiento realizado, observaciones…"
-                      rows={5}
-                      style={{ resize: 'vertical', lineHeight: 1.6 }}
-                    />
-                  </div>
-                  <div style={{ display: 'flex', gap: 10 }}>
-                    <button className="btn btn--outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => { setAddingNote(false); setNoteText(''); setNoteTreatment(''); }}>
-                      Cancelar
-                    </button>
-                    <button className="btn btn--gold" style={{ flex: 1, justifyContent: 'center' }} onClick={handleSaveNote} disabled={savingNote || !noteText.trim()}>
-                      {savingNote ? 'Guardando…' : 'Guardar'}
-                    </button>
-                  </div>
-                </div>
+            {/* Anotación suelta (sin turno asociado) */}
+            {composer?.pickable ? (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)', marginBottom: 8 }}>Nueva anotación</div>
+                {renderComposer(true)}
               </div>
             ) : (
               <button
                 className="btn btn--outline"
                 style={{ width: '100%', justifyContent: 'center', marginBottom: 16 }}
-                onClick={() => setAddingNote(true)}
+                onClick={() => openComposer(today, true)}
               >
-                <Icon name="plus" size={15} color="var(--emerald)" /> Nueva evolución
+                <Icon name="plus" size={15} color="var(--emerald)" /> Nueva anotación
               </button>
             )}
 
-            {/* Timeline */}
             {allDates.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '50px 20px', color: 'var(--faint)' }}>
                 <Icon name="file" size={36} color="var(--faint)" />
                 <p style={{ marginTop: 10, fontSize: 13 }}>Sin historia clínica aún</p>
+                <p style={{ marginTop: 4, fontSize: 12 }}>Los turnos del paciente van a aparecer acá.</p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {allDates.map(date => {
+                  const dateAppts = appointments.filter(a => a.date === date);
                   const dateNotes = notes.filter(n => n.date === date);
-                  const dateAppt = appointments.find(a => a.date === date);
-                  const isPast = date < today;
+                  const datePhotos = photos.filter(p => p.date === date);
+                  const composing = !!composer && !composer.pickable && composer.date === date;
+
                   return (
-                    <div key={date}>
-                      {/* Date header */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                        <div style={{ height: 1, flex: 1, background: 'var(--line)' }} />
-                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--muted)', letterSpacing: '.04em', textTransform: 'capitalize', whiteSpace: 'nowrap' }}>
+                    <div key={date} className="card" style={{ padding: 0, overflow: 'hidden' }}>
+                      {/* Cabecera del evento: fecha + turno(s) y por qué fue */}
+                      <div style={{ padding: '14px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}>
+                        <div style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 15, color: 'var(--ink)', textTransform: 'capitalize' }}>
                           {fmtDate(date)}
-                        </span>
-                        <div style={{ height: 1, flex: 1, background: 'var(--line)' }} />
+                        </div>
+                        {dateAppts.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+                            {dateAppts.map(a => (
+                              <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <Icon name="clock" size={14} color="var(--muted)" />
+                                <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>{a.time.slice(0, 5)} hs</span>
+                                <span style={{ fontSize: 12.5, color: 'var(--muted)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {a.service?.name ?? 'Consulta'}
+                                </span>
+                                <span className={`chip ${STATUS_CHIP[a.status] ?? 'chip--silver'}`} style={{ fontSize: 10.5, padding: '2px 8px', marginLeft: 'auto', flexShrink: 0 }}>
+                                  {STATUS_LABEL[a.status] ?? a.status}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 4 }}>Anotación sin turno</div>
+                        )}
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {/* Appointment for this date */}
-                        {dateAppt && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--line)' }}>
-                            <Icon name="calendar" size={16} color="var(--muted)" />
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600 }}>
-                                {dateAppt.time.slice(0, 5)} hs
-                              </span>
-                              <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 6 }}>
-                                {dateAppt.service?.name ?? 'Consulta'} · {dateAppt.duration_min} min
-                              </span>
-                            </div>
-                            <span className={`chip ${STATUS_CHIP[dateAppt.status] ?? 'chip--silver'}`} style={{ fontSize: 11, padding: '3px 8px', flexShrink: 0 }}>
-                              {STATUS_LABEL[dateAppt.status] ?? dateAppt.status}
-                            </span>
-                          </div>
-                        )}
+                      {/* Cuerpo: evolución + fotos, todo dentro del evento */}
+                      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                        {/* Clinical notes for this date */}
-                        {dateNotes.map(note => (
-                          <div key={note.id} className="card" style={{ padding: '14px 16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                              <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--emerald-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1 }}>
-                                <Icon name="file" size={14} color="var(--emerald)" />
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
+                        {/* Evolución */}
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: 'var(--faint)', textTransform: 'uppercase', marginBottom: 8 }}>Evolución</div>
+                          {dateNotes.length === 0 && !composing && (
+                            <div style={{ fontSize: 12.5, color: 'var(--faint)', marginBottom: 10 }}>Todavía no escribiste la evolución de este turno.</div>
+                          )}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                            {dateNotes.map(note => editingId === note.id ? (
+                              <div key={note.id}>{renderEditForm()}</div>
+                            ) : (
+                              <div key={note.id} style={{ padding: '12px 14px', background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--line)' }}>
                                 {note.treatment && (
-                                  <span className="chip chip--gold" style={{ fontSize: 11, padding: '3px 9px', marginBottom: 7 }}>
-                                    {note.treatment}
-                                  </span>
+                                  <span className="chip chip--gold" style={{ fontSize: 11, padding: '3px 9px', marginBottom: 7 }}>{note.treatment}</span>
                                 )}
                                 <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{note.content}</p>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
-                                  <span style={{ fontSize: 11, color: 'var(--faint)' }}>
-                                    Dra. Valentina Calvo · {fmtTime(note.created_at)}
-                                  </span>
-                                  <button
-                                    onClick={() => setConfirmDeleteId(note.id)}
-                                    disabled={deletingId === note.id}
-                                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, opacity: deletingId === note.id ? 0.4 : 1 }}
-                                    title="Eliminar nota"
-                                  >
-                                    <Icon name="x" size={14} color="var(--faint)" />
-                                  </button>
+                                  <span style={{ fontSize: 11, color: 'var(--faint)' }}>Dra. Valentina Calvo · {fmtTime(note.created_at)}</span>
+                                  <div style={{ display: 'flex', gap: 2 }}>
+                                    <button onClick={() => startEdit(note)} title="Editar" style={iconBtnStyle}>
+                                      <Icon name="edit" size={13} color="var(--muted)" />
+                                    </button>
+                                    <button onClick={() => setConfirmDeleteId(note.id)} disabled={deletingId === note.id}
+                                      title="Eliminar" style={{ ...iconBtnStyle, opacity: deletingId === note.id ? 0.4 : 1 }}>
+                                      <Icon name="x" size={14} color="var(--faint)" />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
+                            ))}
                           </div>
-                        ))}
+                          {composing ? (
+                            <div style={{ marginTop: dateNotes.length ? 8 : 0 }}>{renderComposer(false)}</div>
+                          ) : !editingId && (
+                            <button
+                              onClick={() => openComposer(date)}
+                              style={{ marginTop: dateNotes.length ? 8 : 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '9px 12px', background: 'none', border: '1.5px dashed var(--line)', borderRadius: 10, cursor: 'pointer', color: 'var(--emerald)', fontSize: 12.5, fontWeight: 600, width: '100%' }}
+                            >
+                              <Icon name="plus" size={13} color="var(--emerald)" /> {dateNotes.length ? 'Agregar otra evolución' : 'Escribir evolución'}
+                            </button>
+                          )}
+                        </div>
 
-                        {/* Fotos de esta consulta */}
-                        {(() => {
-                          const datePhotos = photos.filter(p => p.date === date);
-                          return (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                              {datePhotos.map(ph => (
-                                <div key={ph.id} style={{ position: 'relative', width: 84, height: 84 }}>
-                                  {photoUrls[ph.id] ? (
-                                    <a href={photoUrls[ph.id]} target="_blank" rel="noreferrer">
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img src={photoUrls[ph.id]} alt="Foto clínica"
-                                        style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--line)', display: 'block' }} />
-                                    </a>
-                                  ) : (
-                                    <div style={{ width: 84, height: 84, borderRadius: 10, background: 'var(--surface-2)' }} />
-                                  )}
-                                  <button
-                                    onClick={() => setConfirmPhoto(ph)}
-                                    title="Eliminar foto"
-                                    style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh-sm)' }}>
-                                    <Icon name="x" size={11} color="var(--muted)" />
-                                  </button>
-                                </div>
-                              ))}
-                              {/* agregar foto a esta consulta */}
-                              <label htmlFor={`photo-input-${date}`} style={{
-                                width: 84, height: 84, borderRadius: 10, border: '1.5px dashed var(--line)',
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
-                                cursor: uploadingDate === date ? 'wait' : 'pointer', color: 'var(--faint)',
-                                opacity: uploadingDate === date ? 0.5 : 1,
-                              }}>
-                                <Icon name="camera" size={18} color="var(--faint)" />
-                                <span style={{ fontSize: 10, fontWeight: 600 }}>{uploadingDate === date ? 'Subiendo…' : 'Foto'}</span>
-                                <input
-                                  id={`photo-input-${date}`}
-                                  type="file"
-                                  accept="image/*"
-                                  style={{ display: 'none' }}
-                                  disabled={uploadingDate === date}
-                                  onChange={e => {
-                                    const f = e.target.files?.[0];
-                                    if (f) handlePhotoUpload(date, f);
-                                    e.target.value = '';
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          );
-                        })()}
+                        {/* Fotos del evento */}
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: 'var(--faint)', textTransform: 'uppercase', marginBottom: 8 }}>Fotos</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                            {datePhotos.map(ph => (
+                              <div key={ph.id} style={{ position: 'relative', width: 84, height: 84 }}>
+                                {photoUrls[ph.id] ? (
+                                  <a href={photoUrls[ph.id]} target="_blank" rel="noreferrer">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={photoUrls[ph.id]} alt="Foto clínica"
+                                      style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 10, border: '1px solid var(--line)', display: 'block' }} />
+                                  </a>
+                                ) : (
+                                  <div style={{ width: 84, height: 84, borderRadius: 10, background: 'var(--surface-2)' }} />
+                                )}
+                                <button
+                                  onClick={() => setConfirmPhoto(ph)}
+                                  title="Eliminar foto"
+                                  style={{ position: 'absolute', top: -6, right: -6, width: 20, height: 20, borderRadius: '50%', border: '1px solid var(--line)', background: 'var(--surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--sh-sm)' }}>
+                                  <Icon name="x" size={11} color="var(--muted)" />
+                                </button>
+                              </div>
+                            ))}
+                            <label htmlFor={`photo-input-${date}`} style={{
+                              width: 84, height: 84, borderRadius: 10, border: '1.5px dashed var(--line)',
+                              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+                              cursor: uploadingDate === date ? 'wait' : 'pointer', color: 'var(--faint)',
+                              opacity: uploadingDate === date ? 0.5 : 1,
+                            }}>
+                              <Icon name="camera" size={18} color="var(--faint)" />
+                              <span style={{ fontSize: 10, fontWeight: 600 }}>{uploadingDate === date ? 'Subiendo…' : 'Foto'}</span>
+                              <input
+                                id={`photo-input-${date}`}
+                                type="file"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                disabled={uploadingDate === date}
+                                onChange={e => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handlePhotoUpload(date, f);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
 
-                        {/* Si solo hay turno (sin nota) y es pasado, sugerir agregar nota */}
-                        {dateAppt && dateNotes.length === 0 && isPast && (
-                          <button
-                            onClick={() => { setNoteDate(date); setAddingNote(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
-                            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 12px', background: 'none', border: '1.5px dashed var(--line)', borderRadius: 10, cursor: 'pointer', color: 'var(--muted)', fontSize: 12.5, width: '100%' }}
-                          >
-                            <Icon name="plus" size={13} color="var(--muted)" /> Agregar evolución para este día
-                          </button>
-                        )}
                       </div>
                     </div>
                   );

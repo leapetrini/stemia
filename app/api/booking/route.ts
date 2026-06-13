@@ -35,21 +35,27 @@ export async function POST(req: NextRequest) {
   const depositAmount = Number(svcRes.data.deposit_amount ?? 0);
   const requiresDeposit = servicePrice > 0 && depositAmount > 0 && isMercadoPagoEnabled();
 
-  // 2. Buscar o crear paciente por email
+  // 2. Buscar o crear paciente por email (sin distinguir mayúsculas/minúsculas,
+  // así "Mail@x.com" y "mail@x.com" son el mismo paciente). Guardamos el email
+  // normalizado en minúsculas. Si ya existieran duplicados, reutilizamos el más
+  // antiguo en vez de fallar.
+  const normEmail = String(email).trim().toLowerCase();
   let patientId: string;
-  const { data: existing } = await supabaseAdmin
+  const { data: matches } = await supabaseAdmin
     .from('patients')
     .select('id')
-    .eq('email', email)
-    .maybeSingle();
+    .ilike('email', normEmail)
+    .order('created_at', { ascending: true })
+    .limit(1);
+  const existing = matches?.[0];
 
   if (existing) {
     patientId = existing.id;
-    await supabaseAdmin.from('patients').update({ name, phone }).eq('id', patientId);
+    await supabaseAdmin.from('patients').update({ name, phone, email: normEmail }).eq('id', patientId);
   } else {
     const { data: newPatient, error: insertErr } = await supabaseAdmin
       .from('patients')
-      .insert({ name, email, phone })
+      .insert({ name, email: normEmail, phone })
       .select('id')
       .single();
 
