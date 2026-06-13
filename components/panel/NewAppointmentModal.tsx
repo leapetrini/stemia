@@ -4,12 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
-
-const ALL_SLOTS = [
-  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30',
-];
+import { generateSlots, type ScheduleSettings } from '@/lib/slots';
 
 type Patient = { id: string; name: string; phone: string | null; email: string | null };
 
@@ -37,6 +32,7 @@ export function NewAppointmentModal({ date, defaultSlot, onSave, onClose }: Prop
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(defaultSlot ?? null);
   const [bookedSlots, setBookedSlots] = useState<string[]>([]);
+  const [schedule, setSchedule] = useState<ScheduleSettings | null>(null);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +42,19 @@ export function NewAppointmentModal({ date, defaultSlot, onSave, onClose }: Prop
       setBookedSlots((data ?? []).map((a: { time: string }) => a.time.slice(0, 5)));
     });
   }, [date]);
+
+  useEffect(() => {
+    supabase.from('schedule_settings').select('start_time, end_time, slot_minutes').limit(1).maybeSingle()
+      .then(({ data }) => setSchedule((data as ScheduleSettings | null) ?? null));
+  }, []);
+
+  // Slots del horario de atención + el preseleccionado + los ya reservados,
+  // para que el panel pueda agendar sin ocultar horarios existentes.
+  const slots = [...new Set([
+    ...generateSlots(schedule),
+    ...(defaultSlot ? [defaultSlot] : []),
+    ...bookedSlots,
+  ])].sort();
 
   useEffect(() => {
     if (!query.trim() || selectedPatient) { setResults([]); return; }
@@ -172,7 +181,7 @@ export function NewAppointmentModal({ date, defaultSlot, onSave, onClose }: Prop
           <div>
             <label className="form-label">Horario</label>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {ALL_SLOTS.map(slot => {
+              {slots.map(slot => {
                 const booked = bookedSlots.includes(slot);
                 const active = selectedSlot === slot;
                 return (

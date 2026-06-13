@@ -7,12 +7,7 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { NewAppointmentModal } from '@/components/panel/NewAppointmentModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-
-const ALL_SLOTS = [
-  '10:00', '10:30', '11:00', '11:30', '12:00', '12:30',
-  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30',
-];
+import { generateSlots, type ScheduleSettings } from '@/lib/slots';
 
 type AppointmentRow = {
   id: string;
@@ -64,6 +59,20 @@ export default function AgendaPage() {
   const [newDefaultSlot, setNewDefaultSlot] = useState<string | undefined>(undefined);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ appt: AppointmentRow; status: 'completado' | 'ausente' } | null>(null);
+  const [schedule, setSchedule] = useState<ScheduleSettings | null>(null);
+
+  useEffect(() => {
+    supabase.from('schedule_settings').select('start_time, end_time, slot_minutes').limit(1).maybeSingle()
+      .then(({ data }) => setSchedule((data as ScheduleSettings | null) ?? null));
+  }, []);
+
+  // Horarios del timeline: los del horario de atención + cualquier turno
+  // reservado fuera de esa ventana (para no ocultar nunca un turno existente).
+  const slots = useMemo(() => {
+    const base = generateSlots(schedule);
+    const booked = appointments.map(a => a.time.slice(0, 5));
+    return [...new Set([...base, ...booked])].sort();
+  }, [schedule, appointments]);
 
   const fetchAppointments = (date: string) => {
     setLoading(true);
@@ -175,7 +184,7 @@ export default function AgendaPage() {
       <div className="px" style={{ paddingBottom: 32 }}>
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
-            {ALL_SLOTS.map(s => (
+            {slots.map(s => (
               <div key={s} style={{ display: 'flex', gap: 14, alignItems: 'center', minHeight: 52 }}>
                 <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--faint)' }}>{s}</span>
                 <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)', flexShrink: 0 }} />
@@ -185,7 +194,7 @@ export default function AgendaPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
-            {ALL_SLOTS.map(slot => {
+            {slots.map(slot => {
               const appt = appointments.find(a => a.time.slice(0, 5) === slot);
               const isUpdating = appt && updatingId === appt.id;
               const isDone = appt && (appt.status === 'completado' || appt.status === 'ausente' || appt.status === 'cancelado');

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { sendBookingConfirmationEmail } from '@/lib/email';
+import { sendBookingConfirmationEmail, sendNewBookingNotificationEmail } from '@/lib/email';
 import { createDepositPreference, isMercadoPagoEnabled } from '@/lib/mercadopago';
 
 const supabaseAdmin = createClient(
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 4b. Sin cargo: mail de confirmación inmediato
+  // 4b. Sin cargo: mail de confirmación al paciente + aviso a la doctora
   try {
     await sendBookingConfirmationEmail({
       to: email,
@@ -125,6 +125,19 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     // El mail falla silenciosamente — el turno ya fue guardado
     console.error('Gmail error:', err);
+  }
+
+  try {
+    await sendNewBookingNotificationEmail({
+      patientName: name,
+      patientEmail: email,
+      patientPhone: phone,
+      serviceName: svcRes.data.name,
+      dateISO: appointment.date,
+      time: appointment.time,
+    });
+  } catch (err) {
+    console.error('Aviso a la doctora falló:', err);
   }
 
   return NextResponse.json({ ok: true });

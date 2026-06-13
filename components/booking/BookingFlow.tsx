@@ -4,18 +4,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { supabase } from '@/lib/supabase';
+import { generateSlots, type ScheduleSettings } from '@/lib/slots';
 import type { Professional, Service } from '@/lib/types';
 
 const DAY_NAMES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-
-// Slots de 10:00 a 16:30 cada 30 min
-const ALL_SLOTS = Array.from({ length: 14 }, (_, i) => {
-  const totalMin = 10 * 60 + i * 30;
-  const h = Math.floor(totalMin / 60).toString().padStart(2, '0');
-  const m = (totalMin % 60).toString().padStart(2, '0');
-  return `${h}:${m}`;
-});
 
 interface Day {
   idx: number;
@@ -205,7 +198,12 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
   const [selDay, setSelDay] = useState<Day | null>(null);
   const [selTime, setSelTime] = useState<string | null>(null);
   const [bookedByDay, setBookedByDay] = useState<Record<string, string[]>>({});
+  const [blockedByDay, setBlockedByDay] = useState<Record<string, string[]>>({});
+  const [schedule, setSchedule] = useState<ScheduleSettings | null>(null);
   const [availableDays, setAvailableDays] = useState<Day[] | null>(null); // null = loading
+
+  // Horarios base según el horario de atención configurado por la doctora.
+  const baseSlots = useMemo(() => generateSlots(schedule), [schedule]);
 
   const todayISO = useMemo(() => {
     const n = new Date();
@@ -225,7 +223,9 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
     Promise.all([
       supabase.from('appointments').select('date, time').gte('date', startISO).lte('date', endISO),
       supabase.from('available_dates').select('date').gte('date', startISO).lte('date', endISO),
-    ]).then(([apptRes, availRes]) => {
+      supabase.from('blocked_slots').select('date, time').gte('date', startISO).lte('date', endISO),
+      supabase.from('schedule_settings').select('start_time, end_time, slot_minutes').limit(1).maybeSingle(),
+    ]).then(([apptRes, availRes, blockedRes, schedRes]) => {
       const byDay: Record<string, string[]> = {};
       for (const a of apptRes.data ?? []) {
         if (!byDay[a.date]) byDay[a.date] = [];
@@ -233,13 +233,25 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
       }
       setBookedByDay(byDay);
 
+      const blocked: Record<string, string[]> = {};
+      for (const b of blockedRes.data ?? []) {
+        if (!blocked[b.date]) blocked[b.date] = [];
+        blocked[b.date].push(b.time.slice(0, 5));
+      }
+      setBlockedByDay(blocked);
+
+      const sched = (schedRes.data as ScheduleSettings | null) ?? null;
+      setSchedule(sched);
+      const daySlots = generateSlots(sched);
+
       const openDays = new Set((availRes.data ?? []).map((a: { date: string }) => a.date));
 
       const filtered = allDays.filter(day => {
         if (!openDays.has(day.dateISO)) return false;
         const dayBooked = byDay[day.dateISO] ?? [];
-        return ALL_SLOTS.some(t => {
-          if (dayBooked.includes(t)) return false;
+        const dayBlocked = blocked[day.dateISO] ?? [];
+        return daySlots.some(t => {
+          if (dayBooked.includes(t) || dayBlocked.includes(t)) return false;
           if (day.dateISO === todayISO && t <= nowHHMM) return false;
           return true;
         });
@@ -251,17 +263,23 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
 
   const visible = (availableDays ?? []).slice(startIdx, startIdx + 5);
 
-  // Month label from visible window — full name
+  // Mes (+ año) de la ventana visible, en grande. Si abarca dos meses, los une.
   const monthLabel = useMemo(() => {
     if (!visible.length) return '';
-    const months = [...new Set(visible.map(d => d.month))];
-    return months.join(' · ');
+    const seen = new Set<string>();
+    const parts: string[] = [];
+    for (const d of visible) {
+      const key = `${d.month} ${d.date.getFullYear()}`;
+      if (!seen.has(key)) { seen.add(key); parts.push(key); }
+    }
+    return parts.join(' · ');
   }, [visible]);
 
   const slots = selDay
-    ? ALL_SLOTS.filter(t => {
+    ? baseSlots.filter(t => {
         const dayBooked = bookedByDay[selDay.dateISO] ?? [];
-        if (dayBooked.includes(t)) return false;
+        const dayBlocked = blockedByDay[selDay.dateISO] ?? [];
+        if (dayBooked.includes(t) || dayBlocked.includes(t)) return false;
         if (selDay.dateISO === todayISO && t <= nowHHMM) return false;
         return true;
       })
@@ -291,10 +309,17 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
 
       {/* Calendar strip */}
       <div style={{ padding: '18px 0 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', marginBottom: 12 }}>
+        <div style={{ padding: '0 20px', marginBottom: 14 }}>
           <div className="field__label" style={{ margin: 0 }}>Elegir fecha</div>
           {monthLabel && (
-            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)' }}>{monthLabel}</div>
+            <div style={{
+              marginTop: 4,
+              fontFamily: 'var(--serif)', fontSize: 26, fontWeight: 600,
+              color: 'var(--ink)', lineHeight: 1.1, letterSpacing: '.01em',
+              textTransform: 'capitalize' as const,
+            }}>
+              {monthLabel}
+            </div>
           )}
         </div>
 

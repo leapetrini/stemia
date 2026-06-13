@@ -4,7 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { getPayment, verifyWebhookSignature } from '@/lib/mercadopago';
-import { sendBookingConfirmationEmail } from '@/lib/email';
+import { sendBookingConfirmationEmail, sendNewBookingNotificationEmail } from '@/lib/email';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -73,11 +73,12 @@ export async function POST(req: NextRequest) {
       .from('appointments')
       .update({ status: 'confirmado', deposit_paid: true })
       .eq('id', appointmentId)
-      .select('date, time, patient:patients(name, email), professional:professionals(name)')
+      .select('date, time, patient:patients(name, email, phone), service:services(name), professional:professionals(name)')
       .single();
 
     if (appt) {
       const patient = Array.isArray(appt.patient) ? appt.patient[0] : appt.patient;
+      const service = Array.isArray(appt.service) ? appt.service[0] : appt.service;
       const professional = Array.isArray(appt.professional) ? appt.professional[0] : appt.professional;
       if (patient?.email) {
         try {
@@ -92,6 +93,19 @@ export async function POST(req: NextRequest) {
         } catch (err) {
           console.error('Webhook MP: error enviando mail', err);
         }
+      }
+      try {
+        await sendNewBookingNotificationEmail({
+          patientName: patient?.name ?? 'Paciente',
+          patientEmail: patient?.email ?? '',
+          patientPhone: patient?.phone,
+          serviceName: service?.name,
+          dateISO: appt.date,
+          time: appt.time,
+          depositPaid: true,
+        });
+      } catch (err) {
+        console.error('Webhook MP: aviso a la doctora falló', err);
       }
     }
   } else if (payment.status === 'rejected' || payment.status === 'cancelled') {

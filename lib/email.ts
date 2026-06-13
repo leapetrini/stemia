@@ -16,12 +16,26 @@ const transporter = nodemailer.createTransport({
   tls: { rejectUnauthorized: false },
 });
 
+// Mail al que se avisa cada vez que entra una reserva. Configurable por env,
+// con la casilla de la doctora como valor por defecto.
+const ADMIN_NOTIFY_EMAIL = process.env.ADMIN_NOTIFY_EMAIL ?? 'dravalentinacalvo@gmail.com';
+
 export interface BookingEmailInput {
   to: string;
   patientName: string;
   dateISO: string; // YYYY-MM-DD
   time: string; // HH:MM
   professionalName?: string;
+  depositPaid?: boolean;
+}
+
+export interface AdminNotifyInput {
+  patientName: string;
+  patientEmail: string;
+  patientPhone?: string | null;
+  serviceName?: string | null;
+  dateISO: string; // YYYY-MM-DD
+  time: string; // HH:MM
   depositPaid?: boolean;
 }
 
@@ -34,6 +48,80 @@ export function formatSpanishDate(dateISO: string) {
     month: MONTH_NAMES[m - 1],
     year: y,
   };
+}
+
+// Aviso interno a la doctora: quién reservó, cuándo y cómo contactarlo.
+// Se envía además del mail de confirmación que recibe el paciente.
+export async function sendNewBookingNotificationEmail(input: AdminNotifyInput) {
+  const { dayName, day, month, year } = formatSpanishDate(input.dateISO);
+  const time = input.time.slice(0, 5);
+  const phone = input.patientPhone?.trim() || '—';
+  const service = input.serviceName?.trim() || 'Consulta';
+  // Link a wa.me con el teléfono normalizado (solo dígitos), para escribirle directo.
+  const waDigits = (input.patientPhone ?? '').replace(/\D/g, '');
+
+  await transporter.sendMail({
+    from: `"Stemia · Reservas" <${process.env.GMAIL_USER}>`,
+    to: ADMIN_NOTIFY_EMAIL,
+    replyTo: input.patientEmail,
+    subject: `Nueva reserva: ${input.patientName} — ${dayName} ${day}/${month.slice(0, 3)} ${time} hs`,
+    html: `
+      <!DOCTYPE html>
+      <html lang="es">
+      <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+      <body style="margin:0;padding:0;background:#f5f2ee;font-family:'Helvetica Neue',Arial,sans-serif;">
+        <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f2ee;padding:32px 16px;">
+          <tr><td align="center">
+            <table width="100%" style="max-width:520px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.06);">
+              <tr>
+                <td style="background:#1a2e25;padding:24px 32px;">
+                  <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:.12em;color:#8fd6b4;text-transform:uppercase;">Nueva reserva</p>
+                  <h1 style="margin:6px 0 0;font-size:22px;font-weight:600;color:#ffffff;font-family:Georgia,serif;">${input.patientName}</h1>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:24px 32px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#faf5eb;border-radius:10px;border:1px solid #ede0c8;">
+                    <tr><td style="padding:20px 24px;">
+                      <table width="100%" cellpadding="0" cellspacing="0">
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#6b7f76;width:120px;">📅 Fecha</td>
+                          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1a2e25;text-transform:capitalize;">${dayName} ${day} de ${month} de ${year}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#6b7f76;">🕐 Horario</td>
+                          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1a2e25;">${time} hs</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#6b7f76;">💆 Servicio</td>
+                          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1a2e25;">${service}</td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#6b7f76;">✉️ Email</td>
+                          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1a2e25;"><a href="mailto:${input.patientEmail}" style="color:#1a2e25;">${input.patientEmail}</a></td>
+                        </tr>
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#6b7f76;">📱 Teléfono</td>
+                          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1a2e25;">${phone}${waDigits ? ` &nbsp;·&nbsp; <a href="https://wa.me/${waDigits}" style="color:#1a8a4a;">WhatsApp</a>` : ''}</td>
+                        </tr>
+                        ${input.depositPaid ? `
+                        <tr>
+                          <td style="padding:6px 0;font-size:14px;color:#6b7f76;">💳 Seña</td>
+                          <td style="padding:6px 0;font-size:14px;font-weight:600;color:#1a8a4a;">Abonada vía Mercado Pago</td>
+                        </tr>` : ''}
+                      </table>
+                    </td></tr>
+                  </table>
+                  <p style="margin:18px 0 0;font-size:12px;color:#aab5b0;text-align:center;">Aviso automático de Stemia · respondé este mail para escribirle al paciente</p>
+                </td>
+              </tr>
+            </table>
+          </td></tr>
+        </table>
+      </body>
+      </html>
+    `,
+  });
 }
 
 export async function sendBookingConfirmationEmail(input: BookingEmailInput) {
