@@ -93,6 +93,15 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const [editTreatment, setEditTreatment] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
 
+  // Historia clínica plegable: qué consultas están abiertas
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const toggleExpand = (date: string) =>
+    setExpandedDates(prev => {
+      const n = new Set(prev);
+      if (n.has(date)) n.delete(date); else n.add(date);
+      return n;
+    });
+
   // Fotos clínicas por consulta
   const [photos, setPhotos] = useState<ClinicalPhoto[]>([]);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
@@ -169,6 +178,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
     setComposer({ date, pickable });
     setNoteText('');
     setNoteTreatment('');
+    if (!pickable) setExpandedDates(prev => new Set(prev).add(date));
   };
 
   const closeComposer = () => {
@@ -438,13 +448,31 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                   const dateNotes = notes.filter(n => n.date === date);
                   const datePhotos = photos.filter(p => p.date === date);
                   const composing = !!composer && !composer.pickable && composer.date === date;
+                  const isOpen = expandedDates.has(date);
+                  const notesLabel = dateNotes.length === 1 ? '1 evolución' : `${dateNotes.length} evoluciones`;
+                  const photosLabel = datePhotos.length === 1 ? '1 foto' : `${datePhotos.length} fotos`;
+                  const summary = [
+                    dateNotes.length > 0 ? notesLabel : null,
+                    datePhotos.length > 0 ? photosLabel : null,
+                  ].filter(Boolean).join(' · ') || 'Sin evolución cargada';
 
                   return (
                     <div key={date} className="card" style={{ padding: 0, overflow: 'hidden' }}>
-                      {/* Cabecera del evento: fecha + turno(s) y por qué fue */}
-                      <div style={{ padding: '14px 16px', background: 'var(--surface-2)', borderBottom: '1px solid var(--line)' }}>
-                        <div style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 15, color: 'var(--ink)', textTransform: 'capitalize' }}>
-                          {fmtDate(date)}
+                      {/* Cabecera clickeable: fecha + turno(s) y por qué fue */}
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => toggleExpand(date)}
+                        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(date); } }}
+                        style={{ padding: '14px 16px', background: 'var(--surface-2)', borderBottom: isOpen ? '1px solid var(--line)' : 'none', cursor: 'pointer', userSelect: 'none' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ flex: 1, minWidth: 0, fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 15, color: 'var(--ink)', textTransform: 'capitalize' }}>
+                            {fmtDate(date)}
+                          </div>
+                          <span style={{ display: 'inline-flex', flexShrink: 0, transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform .28s ease' }}>
+                            <Icon name="chevDown" size={18} color="var(--muted)" />
+                          </span>
                         </div>
                         {dateAppts.length > 0 ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
@@ -464,10 +492,15 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                         ) : (
                           <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 4 }}>Anotación sin turno</div>
                         )}
+                        {!isOpen && (
+                          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 8 }}>{summary}</div>
+                        )}
                       </div>
 
-                      {/* Cuerpo: evolución + fotos, todo dentro del evento */}
-                      <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {/* Cuerpo plegable con animación de apertura/cierre */}
+                      <div style={{ display: 'grid', gridTemplateRows: isOpen ? '1fr' : '0fr', transition: 'grid-template-rows .28s ease' }}>
+                       <div style={{ overflow: 'hidden', minHeight: 0 }}>
+                        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 16 }}>
 
                         {/* Evolución */}
                         <div>
@@ -558,6 +591,8 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                           </div>
                         </div>
 
+                        </div>
+                       </div>
                       </div>
                     </div>
                   );
