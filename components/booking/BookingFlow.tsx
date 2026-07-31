@@ -542,7 +542,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
   useEffect(() => {
     Promise.all([
       supabase.from('services')
-        .select('id, name, category, description, price, duration_min, deposit_amount, active')
+        .select('id, name, category, description, price, duration_min, deposit_amount, active, professional_id')
         .eq('active', true).order('name'),
       supabase.from('professionals').select('id, name, title, initials, bio').order('name'),
     ]).then(([svcRes, profRes]) => {
@@ -625,7 +625,15 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
             onSelect={s => { setService(s); setStep(2); }} />
         )}
         {step === 2 && (
-          <ProfessionalPicker professionals={professionals} service={service} selected={professional}
+          // Cada servicio lo realiza su profesional. Si el servicio no tiene
+          // uno asignado (dato viejo), se ofrecen todos.
+          <ProfessionalPicker
+            professionals={
+              professionals && service?.professional_id
+                ? professionals.filter(p => p.id === service.professional_id)
+                : professionals
+            }
+            service={service} selected={professional}
             onSelect={p => { setProfessional(p); setStep(3); }} />
         )}
         {step === 3 && <DateTimePicker service={service} onSelect={setDatetime} />}

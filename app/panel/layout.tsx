@@ -7,10 +7,15 @@ import { Icon, Mark } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import type { Session } from '@supabase/supabase-js';
 
-const TABS = [
+const TABS: Array<{
+  id: string; label: string; icon: string; href: string;
+  alt?: string[]; wa?: boolean; badge?: number;
+}> = [
   { id: 'dashboard', label: 'Inicio', icon: 'home', href: '/panel' },
   { id: 'agenda', label: 'Agenda', icon: 'calendar', href: '/panel/agenda' },
   { id: 'pacientes', label: 'Pacientes', icon: 'users', href: '/panel/pacientes' },
+  // Servicios y Cobros son la misma sección (pestañas dentro de la pantalla)
+  { id: 'servicios', label: 'Servicios', icon: 'tag', href: '/panel/servicios', alt: ['/panel/pagos'] },
   { id: 'whatsapp', label: 'WhatsApp', icon: 'chat', href: '/panel/whatsapp', wa: true, badge: 3 },
   { id: 'insumos', label: 'Insumos', icon: 'box', href: '/panel/insumos' },
 ];
@@ -108,7 +113,9 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
 
   const active = (() => {
     if (pathname === '/panel') return 'dashboard';
-    return TABS.filter(t => t.href !== '/panel').find(t => pathname.startsWith(t.href))?.id ?? 'dashboard';
+    return TABS
+      .filter(t => t.href !== '/panel')
+      .find(t => [t.href, ...(t.alt ?? [])].some(h => pathname.startsWith(h)))?.id ?? 'dashboard';
   })();
 
   return (

@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
 import { sendBookingConfirmationEmail, sendNewBookingNotificationEmail } from '@/lib/email';
-import { createDepositPreference, isMercadoPagoEnabled } from '@/lib/mercadopago';
+import { createDepositPreference, getMpCredentials, isMercadoPagoEnabled } from '@/lib/mercadopago';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   // 1. Obtener professional y service de la DB (validados por id si vienen
   // del flujo nuevo; fallback al único servicio/profesional si no)
   const profQuery = supabaseAdmin.from('professionals').select('id, name');
-  const svcQuery = supabaseAdmin.from('services').select('id, name, price, duration_min, deposit_amount').eq('active', true);
+  const svcQuery = supabaseAdmin.from('services').select('id, name, price, duration_min, deposit_amount, professional_id').eq('active', true);
 
   const [profRes, svcRes] = await Promise.all([
     (professional_id ? profQuery.eq('id', professional_id) : profQuery).limit(1).single(),
@@ -30,10 +30,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'El servicio o profesional seleccionado no está disponible' }, { status: 400 });
   }
 
+  // Cada servicio pertenece a un profesional: no se puede reservar un
+  // tratamiento con alguien que no lo realiza. (professional_id nulo =
+  // servicio viejo sin asignar, se acepta con cualquier profesional.)
+  const serviceOwner = svcRes.data.professional_id as string | null;
+  if (serviceOwner && serviceOwner !== profRes.data.id) {
+    return NextResponse.json({ error: 'Ese profesional no realiza el servicio seleccionado' }, { status: 400 });
+  }
+
   // Los servicios sin cargo (precio 0) nunca piden seña: reserva directa
   const servicePrice = Number(svcRes.data.price ?? 0);
   const depositAmount = Number(svcRes.data.deposit_amount ?? 0);
-  const requiresDeposit = servicePrice > 0 && depositAmount > 0 && isMercadoPagoEnabled();
+  const mpCreds = await getMpCredentials(supabaseAdmin, profRes.data.id);
+  const requiresDeposit = servicePrice > 0 && depositAmount > 0 && isMercadoPagoEnabled(mpCreds);
 
   // 2. Buscar o crear paciente por email (sin distinguir mayúsculas/minúsculas,
   // así "Mail@x.com" y "mail@x.com" son el mismo paciente). Guardamos el email
@@ -94,7 +103,9 @@ export async function POST(req: NextRequest) {
   if (requiresDeposit) {
     try {
       const { preferenceId, initPoint } = await createDepositPreference({
+        accessToken: mpCreds!.accessToken,
         appointmentId: appointment.id,
+        professionalId: profRes.data.id,
         serviceName: svcRes.data.name,
         amount: depositAmount,
         payerName: name,

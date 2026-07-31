@@ -20,6 +20,8 @@ export interface Service {
   duration_min: number;
   deposit_amount: number;
   active: boolean;
+  // Profesional que realiza el servicio. Null = servicio viejo sin asignar.
+  professional_id: string | null;
 }
 
 export interface Professional {

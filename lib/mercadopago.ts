@@ -1,16 +1,57 @@
 // Integración con Mercado Pago (Checkout Pro).
-// Si MP_ACCESS_TOKEN no está configurado, isMercadoPagoEnabled() devuelve false
-// y el flujo de reserva sigue funcionando sin cobro (comportamiento actual).
+//
+// Las credenciales salen de la cuenta que la doctora conectó desde el panel
+// (tabla payment_settings, cifradas). Si no conectó ninguna se usan las env
+// vars MP_ACCESS_TOKEN / MP_WEBHOOK_SECRET, y si tampoco están, el flujo de
+// reserva sigue funcionando sin cobro (comportamiento original).
 import { MercadoPagoConfig, Preference, Payment } from 'mercadopago';
 import { createHmac } from 'crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { decryptSecret } from './crypto';
 
-export function isMercadoPagoEnabled(): boolean {
-  return Boolean(process.env.MP_ACCESS_TOKEN);
+export interface MpCredentials {
+  accessToken: string;
+  webhookSecret: string | null;
+  source: 'panel' | 'env';
 }
 
-function client(): MercadoPagoConfig {
-  const accessToken = process.env.MP_ACCESS_TOKEN;
-  if (!accessToken) throw new Error('MP_ACCESS_TOKEN no configurado');
+// Lee las credenciales del profesional. Requiere un cliente con service role:
+// payment_settings tiene RLS sin políticas, nadie más puede leerla.
+export async function getMpCredentials(
+  admin: SupabaseClient,
+  professionalId: string | null,
+): Promise<MpCredentials | null> {
+  if (professionalId) {
+    const { data } = await admin
+      .from('payment_settings')
+      .select('mp_access_token, mp_webhook_secret')
+      .eq('professional_id', professionalId)
+      .maybeSingle();
+
+    const accessToken = decryptSecret(data?.mp_access_token ?? null);
+    if (accessToken) {
+      return {
+        accessToken,
+        webhookSecret: decryptSecret(data?.mp_webhook_secret ?? null),
+        source: 'panel',
+      };
+    }
+  }
+
+  const envToken = process.env.MP_ACCESS_TOKEN;
+  if (!envToken) return null;
+  return {
+    accessToken: envToken,
+    webhookSecret: process.env.MP_WEBHOOK_SECRET ?? null,
+    source: 'env',
+  };
+}
+
+export function isMercadoPagoEnabled(creds: MpCredentials | null): boolean {
+  return Boolean(creds?.accessToken);
+}
+
+function client(accessToken: string): MercadoPagoConfig {
   return new MercadoPagoConfig({ accessToken });
 }
 
@@ -21,7 +62,9 @@ function siteUrl(): string {
 }
 
 export interface DepositPreferenceInput {
+  accessToken: string;
   appointmentId: string;
+  professionalId: string;
   serviceName: string;
   amount: number;
   payerName: string;
@@ -32,7 +75,7 @@ export interface DepositPreferenceInput {
 // Devuelve la URL (init_point) a la que hay que redirigir a la paciente.
 export async function createDepositPreference(input: DepositPreferenceInput) {
   const base = siteUrl();
-  const preference = await new Preference(client()).create({
+  const preference = await new Preference(client(input.accessToken)).create({
     body: {
       items: [
         {
@@ -53,28 +96,61 @@ export async function createDepositPreference(input: DepositPreferenceInput) {
         failure: `${base}/reserva/estado`,
       },
       auto_return: 'approved',
-      notification_url: `${base}/api/webhooks/mercadopago`,
+      // El ?prof= le dice al webhook con qué cuenta consultar el pago:
+      // cada profesional puede tener credenciales distintas.
+      notification_url: `${base}/api/webhooks/mercadopago?prof=${input.professionalId}`,
       statement_descriptor: 'STEMIA',
     },
   });
   return { preferenceId: preference.id!, initPoint: preference.init_point! };
 }
 
-export async function getPayment(paymentId: string) {
-  return new Payment(client()).get({ id: paymentId });
+export async function getPayment(accessToken: string, paymentId: string) {
+  return new Payment(client(accessToken)).get({ id: paymentId });
+}
+
+export interface MpAccount {
+  id: string;
+  nickname: string | null;
+  email: string | null;
+  siteId: string | null;
+}
+
+// Valida un access token contra la API de Mercado Pago y devuelve de quién es.
+// Sirve para no guardar credenciales mal pegadas.
+export async function fetchMpAccount(accessToken: string): Promise<MpAccount> {
+  const res = await fetch('https://api.mercadopago.com/users/me', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(res.status === 401 ? 'TOKEN_INVALIDO' : `MP respondió ${res.status}`);
+  }
+  const json = await res.json();
+  return {
+    id: String(json.id),
+    nickname: json.nickname ?? null,
+    email: json.email ?? null,
+    siteId: json.site_id ?? null,
+  };
+}
+
+// Las credenciales de prueba de MP empiezan con TEST-; las productivas con APP_USR-.
+export function tokenMode(accessToken: string): 'test' | 'prod' {
+  return accessToken.trim().startsWith('TEST-') ? 'test' : 'prod';
 }
 
 // Valida la firma x-signature de las notificaciones webhook.
 // https://www.mercadopago.com.ar/developers/es/docs/your-integrations/notifications/webhooks
-// Si MP_WEBHOOK_SECRET no está configurado, no se valida (útil en desarrollo,
-// pero configurarlo siempre en producción).
+// Si el profesional no configuró la clave secreta, no se valida (útil en
+// desarrollo, pero conviene cargarla siempre en producción).
 export function verifyWebhookSignature(opts: {
+  secret: string | null;
   xSignature: string | null;
   xRequestId: string | null;
   dataId: string;
 }): boolean {
-  const secret = process.env.MP_WEBHOOK_SECRET;
-  if (!secret) return true;
+  if (!opts.secret) return true;
   if (!opts.xSignature) return false;
 
   const parts: Record<string, string> = {};
@@ -85,6 +161,6 @@ export function verifyWebhookSignature(opts: {
   if (!parts.ts || !parts.v1) return false;
 
   const manifest = `id:${opts.dataId.toLowerCase()};request-id:${opts.xRequestId ?? ''};ts:${parts.ts};`;
-  const expected = createHmac('sha256', secret).update(manifest).digest('hex');
+  const expected = createHmac('sha256', opts.secret).update(manifest).digest('hex');
   return expected === parts.v1;
 }

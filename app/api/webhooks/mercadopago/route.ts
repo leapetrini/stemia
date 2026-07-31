@@ -3,7 +3,7 @@
 // es solo informativa, porque el usuario puede cerrarla antes de volver.
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { getPayment, verifyWebhookSignature } from '@/lib/mercadopago';
+import { getMpCredentials, getPayment, verifyWebhookSignature } from '@/lib/mercadopago';
 import { sendBookingConfirmationEmail, sendNewBookingNotificationEmail } from '@/lib/email';
 
 const supabaseAdmin = createClient(
@@ -23,7 +23,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // La preferencia lleva ?prof= en la notification_url: identifica con qué
+  // cuenta de Mercado Pago hay que validar la firma y consultar el pago.
+  const professionalId = url.searchParams.get('prof');
+  const creds = await getMpCredentials(supabaseAdmin, professionalId);
+  if (!creds) {
+    console.error('Webhook MP: sin credenciales para el profesional', professionalId);
+    return NextResponse.json({ error: 'sin credenciales' }, { status: 500 });
+  }
+
   const valid = verifyWebhookSignature({
+    secret: creds.webhookSecret,
     xSignature: req.headers.get('x-signature'),
     xRequestId: req.headers.get('x-request-id'),
     dataId: String(dataId),
@@ -35,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   let payment;
   try {
-    payment = await getPayment(String(dataId));
+    payment = await getPayment(creds.accessToken, String(dataId));
   } catch (err) {
     console.error('Webhook MP: error consultando pago', dataId, err);
     // 500 hace que MP reintente la notificación más tarde
