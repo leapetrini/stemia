@@ -50,14 +50,25 @@ export async function POST(req: NextRequest) {
   const publicKey = String(body.publicKey ?? '').trim();
   const webhookSecret = String(body.webhookSecret ?? '').trim();
 
-  if (!accessToken) {
+  // Si ya hay una cuenta conectada se pueden actualizar solo la firma del
+  // webhook o la public key: los campos que quedan vacíos conservan su valor.
+  const { data: current } = await session.admin
+    .from('payment_settings')
+    .select('mp_access_token, mp_public_key, mp_webhook_secret')
+    .eq('professional_id', session.professionalId)
+    .maybeSingle();
+
+  const storedToken = decryptSecret(current?.mp_access_token ?? null);
+  const token = accessToken || storedToken;
+
+  if (!token) {
     return NextResponse.json({ error: 'Pegá el Access Token de Mercado Pago.' }, { status: 400 });
   }
 
   // No guardamos nada sin confirmar que el token es válido y de quién es
   let account;
   try {
-    account = await fetchMpAccount(accessToken);
+    account = await fetchMpAccount(token);
   } catch (err) {
     const invalid = err instanceof Error && err.message === 'TOKEN_INVALIDO';
     console.error('Validación de token MP falló:', err);
@@ -71,15 +82,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const nextWebhookSecret = webhookSecret
+    ? encryptSecret(webhookSecret)
+    : current?.mp_webhook_secret ?? null;
+
   const now = new Date().toISOString();
   const { error } = await session.admin.from('payment_settings').upsert({
     professional_id: session.professionalId,
-    mp_access_token: encryptSecret(accessToken),
-    mp_public_key: publicKey || null,
-    mp_webhook_secret: webhookSecret ? encryptSecret(webhookSecret) : null,
+    mp_access_token: encryptSecret(token),
+    mp_public_key: publicKey || current?.mp_public_key || null,
+    mp_webhook_secret: nextWebhookSecret,
     mp_user_id: account.id,
     mp_account: account.nickname ?? account.email,
-    mp_mode: tokenMode(accessToken),
+    mp_mode: tokenMode(token),
     connected_at: now,
     updated_at: now,
   });
@@ -93,10 +108,10 @@ export async function POST(req: NextRequest) {
     connected: true,
     envFallback: false,
     account: account.nickname ?? account.email,
-    mode: tokenMode(accessToken),
-    tokenPreview: maskToken(accessToken),
-    publicKey: publicKey || null,
-    hasWebhookSecret: Boolean(webhookSecret),
+    mode: tokenMode(token),
+    tokenPreview: maskToken(token),
+    publicKey: publicKey || current?.mp_public_key || null,
+    hasWebhookSecret: Boolean(nextWebhookSecret),
     connectedAt: now,
     updatedAt: now,
   });

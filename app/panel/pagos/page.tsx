@@ -79,7 +79,7 @@ export default function PagosPage() {
   }, []);
 
   const save = async () => {
-    if (!accessToken.trim()) { setError('Pegá el Access Token.'); return; }
+    if (!accessToken.trim() && !connected) { setError('Pegá el Access Token.'); return; }
     setSaving(true);
     setError(null);
 
@@ -205,18 +205,28 @@ export default function PagosPage() {
               {form && (
                 <div className="card" style={{ padding: 16, marginBottom: 16 }}>
                   <div style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--ink)' }}>Credenciales de tu cuenta</div>
-                  <ol style={{ margin: '9px 0 16px', paddingLeft: 18, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.65 }}>
-                    <li>Entrá a <strong>mercadopago.com.ar/developers</strong> con tu usuario y andá a <em>Tus integraciones</em>.</li>
-                    <li>Creá una aplicación (o abrí la que ya tenés) y entrá a <em>Credenciales de producción</em>.</li>
-                    <li>Copiá el <strong>Access Token</strong> y pegalo acá abajo.</li>
-                  </ol>
+                  {connected ? (
+                    <div style={{ margin: '9px 0 16px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.6 }}>
+                      Completá solo lo que quieras cambiar. Lo que dejes vacío se mantiene como está.
+                    </div>
+                  ) : (
+                    <ol style={{ margin: '9px 0 16px', paddingLeft: 18, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.65 }}>
+                      <li>Entrá a <strong>mercadopago.com.ar/developers</strong> con tu usuario y andá a <em>Tus integraciones</em>.</li>
+                      <li>Creá una aplicación (o abrí la que ya tenés) y entrá a <em>Credenciales de producción</em>.</li>
+                      <li>Copiá el <strong>Access Token</strong> y pegalo acá abajo.</li>
+                    </ol>
+                  )}
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
                     <div>
-                      <label className="form-label">Access Token *</label>
+                      <label className="form-label">
+                        Access Token {connected
+                          ? <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(vacío = conservar el actual)</span>
+                          : '*'}
+                      </label>
                       <input className="input" type="password" autoComplete="off" spellCheck={false}
                         value={accessToken} onChange={e => setAccessToken(e.target.value)}
-                        placeholder="APP_USR-…" />
+                        placeholder={connected ? `Actual: ${status?.tokenPreview ?? ''}` : 'APP_USR-…'} />
                       <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 5 }}>
                         Se guarda cifrado y nunca se muestra completo de nuevo.
                       </div>
