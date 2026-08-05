@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
+import { RichText } from '@/components/ui/RichText';
 import type { Service } from '@/lib/types';
 
 interface Props {
@@ -15,6 +16,16 @@ interface Props {
 }
 
 const DURATIONS = [15, 20, 30, 45, 60, 75, 90, 120, 150, 180];
+
+// Muestra con el formato puesto: un párrafo, un renglón en blanco y una lista.
+const DESCRIPTION_PLACEHOLDER = `¿No sabés qué productos usar? Esta asesoría te ayuda a entender tu piel y armar una rutina personalizada.
+
+Incluye:
+✔ Historia clínica
+✔ Evaluación por fotos y videollamada
+✔ Rutina de día y noche
+
+Valor: $59.000 ARS`;
 
 const fmtPrice = (n: number) =>
   n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 });
@@ -121,8 +132,28 @@ export function ServiceModal({ service, professionalId, categories, onSave, onCl
             <label className="form-label">
               Descripción <span style={{ fontWeight: 400, color: 'var(--faint)' }}>(la ve la paciente al reservar)</span>
             </label>
-            <textarea className="input" rows={3} value={description} onChange={e => setDescription(e.target.value)}
-              placeholder="Qué incluye, cómo es el procedimiento, cuidados previos…" />
+            <textarea className="input" rows={7} value={description} onChange={e => setDescription(e.target.value)}
+              style={{ lineHeight: 1.55, resize: 'vertical' }}
+              placeholder={DESCRIPTION_PLACEHOLDER} />
+            <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 6, lineHeight: 1.5 }}>
+              Se respeta cómo lo escribís: dejá un renglón en blanco para separar párrafos y
+              empezá la línea con <strong>-</strong> o <strong>✔</strong> para armar una lista.
+            </div>
+
+            {/* Vista previa: exactamente como lo va a ver la paciente */}
+            {description.trim() && (
+              <div style={{
+                marginTop: 10, padding: '12px 14px', borderRadius: 'var(--r)',
+                background: 'var(--surface-2)', border: '1px solid var(--line)',
+              }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 8 }}>
+                  Así lo ve la paciente
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+                  <RichText text={description} />
+                </div>
+              </div>
+            )}
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

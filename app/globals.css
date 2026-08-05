@@ -159,9 +159,41 @@ textarea.input { resize: none; line-height: 1.5; }
 }
 .card--press:active { transform: scale(.985); }
 
+/* Tarjeta de servicio en la reserva: la parte de arriba selecciona, la
+   descripción de abajo se pliega sola con "Ver más" */
+.svc-card { overflow: hidden; padding: 0; }
+.svc-card__pick {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%;
+  padding: 15px 16px 12px; background: none; border: none;
+  text-align: left; cursor: pointer; font-family: var(--sans); color: inherit;
+}
+.svc-card__desc { padding: 0 16px 14px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+
+/* Texto con formato: respeta párrafos, saltos de línea y listas */
+.rich { display: flex; flex-direction: column; gap: 9px; }
+.rich__p { margin: 0; white-space: pre-line; }
+.rich__list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.rich__list--num { list-style: decimal; padding-left: 1.35em; }
+.rich__list--num li::marker { font-weight: 700; color: var(--emerald); }
+.rich__item { display: flex; align-items: flex-start; gap: 8px; }
+.rich__item > span { min-width: 0; }
+.rich__check { flex-shrink: 0; margin-top: .3em; }
+
+/* Botón de texto tipo enlace ("Ver más", "Ver menos") */
+.linkbtn {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 6px; padding: 3px 0; background: none; border: none;
+  font-family: var(--sans); font-size: 12.5px; font-weight: 600;
+  color: var(--emerald); cursor: pointer;
+}
+.linkbtn:hover { color: var(--emerald-700); }
+.linkbtn__chev { display: inline-flex; transition: transform .25s ease; }
+.linkbtn__chev--open { transform: rotate(180deg); }
+
 @media (prefers-reduced-motion: reduce) {
   .scr-anim, .anim-overlay, .anim-pop, .anim-sheet, .step-anim { animation: none; }
   .card--press, .card--press:hover, .card--press:active { transform: none; }
+  .linkbtn__chev { transition: none; }
 }
 
 /* Shell */

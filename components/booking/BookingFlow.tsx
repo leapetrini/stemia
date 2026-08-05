@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
+import { ExpandableText } from '@/components/ui/RichText';
 import { supabase } from '@/lib/supabase';
 import { generateSlots, type ScheduleSettings } from '@/lib/slots';
 import type { Professional, Service } from '@/lib/types';
@@ -91,6 +92,48 @@ function StepIndicator({ step }: { step: number }) {
 }
 
 // ── Step 1: servicio ────────────────────────────────────────────
+// La tarjeta tiene dos zonas: arriba el botón que elige el servicio y abajo
+// la descripción, que se pliega sola con "Ver más" si es larga. Están
+// separadas para que tocar "Ver más" no reserve el turno sin querer.
+function ServiceCard({ service, selected, onSelect }: {
+  service: Service;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const free = (service.price ?? 0) === 0;
+
+  return (
+    <div className="card card--press svc-card" style={{
+      border: selected ? '2px solid var(--emerald)' : '1px solid var(--line)',
+      background: selected ? 'var(--emerald-tint)' : 'var(--surface)',
+    }}>
+      <button type="button" className="svc-card__pick" onClick={onSelect}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--ink)' }}>{service.name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9, flexWrap: 'wrap' }}>
+            <span className="chip chip--silver" style={{ fontSize: 11, padding: '3px 9px' }}>
+              <Icon name="clock" size={11} /> {service.duration_min} min
+            </span>
+            <span className={`chip ${free ? 'chip--emerald' : 'chip--gold'}`} style={{ fontSize: 11, padding: '3px 9px' }}>
+              {free ? 'Sin cargo' : fmtPrice(service.price)}
+            </span>
+            {!free && (service.deposit_amount ?? 0) > 0 && (
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>Seña {fmtPrice(service.deposit_amount)}</span>
+            )}
+          </div>
+        </div>
+        <Icon name="chevR" size={17} color={selected ? 'var(--emerald)' : 'var(--faint)'} />
+      </button>
+
+      {service.description && (
+        <div className="svc-card__desc">
+          <ExpandableText text={service.description} collapsedHeight={72} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 function ServicePicker({ services, selected, onSelect }: {
   services: Service[] | null;
   selected: Service | null;
@@ -110,36 +153,11 @@ function ServicePicker({ services, selected, onSelect }: {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {services.map(s => {
-            const isSel = selected?.id === s.id;
-            const free = (s.price ?? 0) === 0;
-            return (
-              <button key={s.id} onClick={() => onSelect(s)} className="card card--press" style={{
-                padding: '15px 16px', textAlign: 'left', cursor: 'pointer', width: '100%',
-                border: isSel ? '2px solid var(--emerald)' : '1px solid var(--line)',
-                background: isSel ? 'var(--emerald-tint)' : 'var(--surface)',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--ink)' }}>{s.name}</div>
-                    {s.description && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, lineHeight: 1.45 }}>{s.description}</div>}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 9, flexWrap: 'wrap' }}>
-                      <span className="chip chip--silver" style={{ fontSize: 11, padding: '3px 9px' }}>
-                        <Icon name="clock" size={11} /> {s.duration_min} min
-                      </span>
-                      <span className={`chip ${free ? 'chip--emerald' : 'chip--gold'}`} style={{ fontSize: 11, padding: '3px 9px' }}>
-                        {free ? 'Sin cargo' : fmtPrice(s.price)}
-                      </span>
-                      {!free && (s.deposit_amount ?? 0) > 0 && (
-                        <span style={{ fontSize: 11, color: 'var(--muted)' }}>Seña {fmtPrice(s.deposit_amount)}</span>
-                      )}
-                    </div>
-                  </div>
-                  <Icon name="chevR" size={17} color={isSel ? 'var(--emerald)' : 'var(--faint)'} />
-                </div>
-              </button>
-            );
-          })}
+          {services.map(s => (
+            <ServiceCard key={s.id} service={s}
+              selected={selected?.id === s.id}
+              onSelect={() => onSelect(s)} />
+          ))}
         </div>
       )}
     </div>

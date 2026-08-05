@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { getMyProfessional } from '@/lib/professional';
 import { Icon } from '@/components/ui/Icon';
+import { ExpandableText } from '@/components/ui/RichText';
 import { ServiceModal } from '@/components/panel/ServiceModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Service } from '@/lib/types';
@@ -166,9 +167,10 @@ export default function ServiciosPage() {
                             )}
                           </div>
 
+                          {/* Se muestra igual que en la reserva, así ve cómo le queda */}
                           {s.description && (
-                            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.45 }}>
-                              {s.description}
+                            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.55 }}>
+                              <ExpandableText text={s.description} collapsedHeight={60} />
                             </div>
                           )}
 
