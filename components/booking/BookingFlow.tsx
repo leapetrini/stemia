@@ -6,7 +6,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { ExpandableText } from '@/components/ui/RichText';
 import { supabase } from '@/lib/supabase';
 import { generateSlots, type ScheduleSettings } from '@/lib/slots';
-import type { Professional, Service } from '@/lib/types';
+import { BLOCKING_STATUSES, type Professional, type Service } from '@/lib/types';
 
 const DAY_NAMES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -239,7 +239,10 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
     if (!startISO || !endISO) { setAvailableDays([]); return; }
 
     Promise.all([
-      supabase.from('appointments').select('date, time').gte('date', startISO).lte('date', endISO),
+      // Solo los turnos activos tapan el horario: uno cancelado o ausente lo
+      // libera, si no el horario quedaría bloqueado para siempre.
+      supabase.from('appointments').select('date, time')
+        .in('status', BLOCKING_STATUSES).gte('date', startISO).lte('date', endISO),
       supabase.from('available_dates').select('date').gte('date', startISO).lte('date', endISO),
       supabase.from('blocked_slots').select('date, time').gte('date', startISO).lte('date', endISO),
       supabase.from('schedule_settings').select('start_time, end_time, slot_minutes').limit(1).maybeSingle(),

@@ -36,6 +36,10 @@ yarn-error.log*
 # notas de trabajo locales (no subir)
 NOTAS.md
 
+# El repo es publico: este script describe agujeros de la base en produccion.
+# Se corre a mano desde el SQL Editor y se saca de aca cuando este aplicado.
+supabase/migrations/*_rls_lockdown.sql
+
 # vercel
 .vercel
 

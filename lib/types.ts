@@ -32,6 +32,20 @@ export interface Professional {
   bio: string | null;
 }
 
+// 'ausente' = la paciente no vino. El turno NO se borra: queda registrado en la
+// historia clínica (y con él, el registro del pago de la seña si la hubo).
+export type AppointmentStatus =
+  | 'pendiente' | 'confirmado' | 'en-sala' | 'completado' | 'ausente' | 'cancelado';
+
+// Estados que ocupan el horario. Un turno cancelado o ausente lo libera: si no,
+// el horario quedaría bloqueado para siempre y nadie podría volver a reservarlo.
+export const BLOCKING_STATUSES: AppointmentStatus[] =
+  ['pendiente', 'confirmado', 'en-sala', 'completado'];
+
+export function blocksSlot(status: string): boolean {
+  return (BLOCKING_STATUSES as string[]).includes(status);
+}
+
 export interface Appointment {
   id: string;
   patient_id: string;
@@ -40,7 +54,7 @@ export interface Appointment {
   date: string;
   time: string;
   duration_min: number;
-  status: 'pendiente' | 'confirmado' | 'en-sala' | 'completado' | 'cancelado';
+  status: AppointmentStatus;
   notes: string | null;
   deposit_paid: boolean;
   created_at: string;
@@ -60,4 +74,3 @@ export interface InventoryItem {
   expiry: string | null;
 }
 
-export type AppointmentStatus = Appointment['status'];

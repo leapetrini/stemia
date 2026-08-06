@@ -89,15 +89,12 @@ export default function AgendaPage() {
 
   useEffect(() => { fetchAppointments(selectedDate); }, [selectedDate]);
 
+  // Ningún estado borra el turno: "No vino" lo deja como 'ausente' para que
+  // quede en la historia clínica de la paciente junto con el pago de la seña.
   const handleStatusChange = async (id: string, newStatus: string) => {
     setUpdatingId(id);
-    if (newStatus === 'ausente') {
-      const { error } = await supabase.from('appointments').delete().eq('id', id);
-      if (!error) setAppointments(prev => prev.filter(a => a.id !== id));
-    } else {
-      const { error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id);
-      if (!error) setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
-    }
+    const { error } = await supabase.from('appointments').update({ status: newStatus }).eq('id', id);
+    if (!error) setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: newStatus } : a));
     setUpdatingId(null);
     setConfirmAction(null);
   };
@@ -296,8 +293,8 @@ export default function AgendaPage() {
       ) : (
         <ConfirmDialog
           title="Marcar como no vino"
-          message={`El turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs se eliminará de la agenda. Esta acción no se puede deshacer.`}
-          confirmLabel="Sí, eliminar"
+          message={`El turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs queda registrado como "No vino" en su historia clínica. No se borra nada.`}
+          confirmLabel="Sí, no vino"
           tone="danger"
           loading={updatingId === confirmAction.appt.id}
           onConfirm={() => handleStatusChange(confirmAction.appt.id, 'ausente')}

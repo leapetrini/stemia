@@ -18,6 +18,9 @@ interface Props {
 export function ConfirmDialog({ title, message, confirmLabel, tone = 'danger', icon, loading, onConfirm, onClose }: Props) {
   const color = tone === 'danger' ? 'var(--danger)' : 'var(--emerald)';
   const bg = tone === 'danger' ? 'rgba(180,83,63,.1)' : 'var(--emerald-tint)';
+  // Los mensajes de varias líneas (ej. la lista de turnos de un día) se leen
+  // mejor alineados a la izquierda y con scroll si son largos.
+  const multiline = message.includes('\n');
 
   return (
     <div
@@ -30,7 +33,13 @@ export function ConfirmDialog({ title, message, confirmLabel, tone = 'danger', i
           <Icon name={icon ?? (tone === 'danger' ? 'alert' : 'checkCircle')} size={24} color={color} />
         </div>
         <h2 style={{ margin: 0, fontSize: 19, fontFamily: 'var(--serif)', fontWeight: 600, color: 'var(--ink)' }}>{title}</h2>
-        <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55 }}>{message}</p>
+        <p style={{
+          margin: '10px 0 0', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.55,
+          whiteSpace: 'pre-line',
+          textAlign: multiline ? 'left' : 'center',
+          maxHeight: multiline ? '46dvh' : undefined,
+          overflowY: multiline ? 'auto' : undefined,
+        }}>{message}</p>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
           <button className="btn btn--outline" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose} disabled={loading}>
