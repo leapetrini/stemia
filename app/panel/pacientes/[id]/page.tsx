@@ -7,6 +7,8 @@ import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { PatientModal, type PatientData } from '@/components/panel/PatientModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { RichText } from '@/components/ui/RichText';
+import { blocksSlot } from '@/lib/types';
 
 type Patient = PatientData;
 
@@ -68,6 +70,12 @@ function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
 }
 
+function fmtShortDate(iso: string) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('es-AR', {
+    day: 'numeric', month: 'long', year: 'numeric',
+  });
+}
+
 export default function PatientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
@@ -101,6 +109,10 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
       if (n.has(date)) n.delete(date); else n.add(date);
       return n;
     });
+
+  // Tratamientos sugeridos en la evolución: los servicios que ofrece la
+  // profesional. Se cargan una vez y alimentan el datalist del formulario.
+  const [serviceNames, setServiceNames] = useState<string[]>([]);
 
   // Fotos clínicas por consulta
   const [photos, setPhotos] = useState<ClinicalPhoto[]>([]);
@@ -142,10 +154,12 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
         .eq('patient_id', id)
         .order('date', { ascending: false })
         .order('created_at', { ascending: false }),
-    ]).then(([patRes, apptRes, notesRes]) => {
+      supabase.from('services').select('name').eq('active', true).order('name'),
+    ]).then(([patRes, apptRes, notesRes, svcRes]) => {
       setPatient(patRes.data as Patient);
       setAppointments((apptRes.data as unknown as Appointment[]) ?? []);
       setNotes((notesRes.data as ClinicalNote[]) ?? []);
+      setServiceNames(((svcRes.data as { name: string }[]) ?? []).map(s => s.name));
       setLoading(false);
     });
     loadPhotos();
@@ -243,6 +257,10 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const joinDate = new Date(patient.created_at).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' });
   const today = toLocalISO(new Date());
 
+  // Última vez que vino: el turno más reciente ya pasado que no se canceló ni
+  // quedó ausente. `appointments` viene ordenado de más nuevo a más viejo.
+  const lastVisit = appointments.find(a => a.date <= today && blocksSlot(a.status));
+
   // Timeline: all unique dates across notes + appointments + photos
   const allDates = [...new Set([
     ...notes.map(n => n.date),
@@ -255,6 +273,22 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
     display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6,
   };
 
+  // Campo "Tratamiento realizado": se elige de la lista o se escribe uno nuevo.
+  // Sugerimos los servicios del catálogo más lo que ya se usó con esta paciente.
+  const treatmentOptions = [...new Set([
+    ...serviceNames,
+    ...notes.map(n => n.treatment).filter((t): t is string => !!t),
+  ])].sort((a, b) => a.localeCompare(b, 'es'));
+
+  const treatmentField = (value: string, onChange: (v: string) => void) => (
+    <div>
+      <label className="form-label">Tratamiento realizado (opcional)</label>
+      <input className="input" value={value} onChange={e => onChange(e.target.value)}
+        list="tratamientos" autoComplete="off"
+        placeholder={treatmentOptions.length ? 'Elegí de la lista o escribí uno' : 'Ej. Limpieza facial profunda, peeling…'} />
+    </div>
+  );
+
   // Formulario para escribir una evolución (inline en un turno o suelta).
   const renderComposer = (showDatePicker: boolean) => (
     <div className="card" style={{ padding: '14px 16px', border: '1.5px solid var(--emerald)' }}>
@@ -266,16 +300,16 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
               onChange={e => setComposer(c => (c ? { ...c, date: e.target.value } : c))} />
           </div>
         )}
-        <div>
-          <label className="form-label">Tratamiento realizado (opcional)</label>
-          <input className="input" value={noteTreatment} onChange={e => setNoteTreatment(e.target.value)}
-            placeholder="Ej. Limpieza facial profunda, peeling…" />
-        </div>
+        {treatmentField(noteTreatment, setNoteTreatment)}
         <div>
           <label className="form-label">Evolución / observaciones</label>
           <textarea className="input" value={noteText} onChange={e => setNoteText(e.target.value)}
             placeholder="Escribí la evolución, observaciones, indicaciones…" rows={5}
             style={{ resize: 'vertical', lineHeight: 1.6 }} />
+          <div style={{ fontSize: 11, color: 'var(--faint)', marginTop: 5, lineHeight: 1.5 }}>
+            Se respeta cómo lo escribís: dejá un renglón en blanco para separar párrafos
+            y empezá la línea con <strong>-</strong> para armar una lista.
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button className="btn btn--outline" style={{ flex: 1, justifyContent: 'center' }} onClick={closeComposer}>Cancelar</button>
@@ -291,11 +325,7 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
   const renderEditForm = () => (
     <div className="card" style={{ padding: '14px 16px', border: '1.5px solid var(--emerald)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        <div>
-          <label className="form-label">Tratamiento realizado (opcional)</label>
-          <input className="input" value={editTreatment} onChange={e => setEditTreatment(e.target.value)}
-            placeholder="Ej. Limpieza facial profunda, peeling…" />
-        </div>
+        {treatmentField(editTreatment, setEditTreatment)}
         <div>
           <label className="form-label">Evolución / observaciones</label>
           <textarea className="input" value={editText} onChange={e => setEditText(e.target.value)}
@@ -313,6 +343,12 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
+    {/* Sugerencias del campo "Tratamiento realizado", compartido por los dos
+        formularios (nueva evolución y edición) */}
+    <datalist id="tratamientos">
+      {treatmentOptions.map(t => <option key={t} value={t} />)}
+    </datalist>
+
     <div className="page scr-anim">
       {/* HEADER */}
       <div className="scrhead">
@@ -330,6 +366,12 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
           <div style={{ flex: 1, minWidth: 0 }}>
             <h1 style={{ margin: 0, fontSize: 21, fontFamily: 'var(--serif)', color: 'var(--ink)', fontWeight: 600 }}>{patient.name}</h1>
             <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--faint)' }}>Desde {joinDate} · {appointments.length} turno{appointments.length !== 1 ? 's' : ''}</p>
+            <p style={{ margin: '4px 0 0', fontSize: 12.5, color: lastVisit ? 'var(--emerald)' : 'var(--faint)', fontWeight: 600 }}>
+              <Icon name="clock" size={12} color="currentColor" />{' '}
+              {lastVisit
+                ? `Última visita: ${fmtShortDate(lastVisit.date)}${lastVisit.service?.name ? ` · ${lastVisit.service.name}` : ''}`
+                : 'Todavía no vino'}
+            </p>
           </div>
         </div>
 
@@ -516,7 +558,9 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                                 {note.treatment && (
                                   <span className="chip chip--gold" style={{ fontSize: 11, padding: '3px 9px', marginBottom: 7 }}>{note.treatment}</span>
                                 )}
-                                <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>{note.content}</p>
+                                <div style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.65 }}>
+                                  <RichText text={note.content} />
+                                </div>
                                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
                                   <span style={{ fontSize: 11, color: 'var(--faint)' }}>Dra. Valentina Calvo · {fmtTime(note.created_at)}</span>
                                   <div style={{ display: 'flex', gap: 2 }}>

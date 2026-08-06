@@ -6,27 +6,59 @@ import { supabase } from '@/lib/supabase';
 import { Icon } from '@/components/ui/Icon';
 import { Avatar } from '@/components/ui/Avatar';
 import { PatientModal, type PatientData } from '@/components/panel/PatientModal';
+import { BLOCKING_STATUSES } from '@/lib/types';
 
 type PatientRow = PatientData;
+
+// "hace 3 días", "hace 2 meses" — más útil de un vistazo que la fecha exacta.
+function sinceLabel(iso: string): string {
+  const days = Math.round((Date.now() - new Date(iso + 'T12:00:00').getTime()) / 86400000);
+  if (days <= 0) return 'hoy';
+  if (days === 1) return 'ayer';
+  if (days < 30) return `hace ${days} días`;
+  const months = Math.round(days / 30);
+  if (months < 12) return `hace ${months} ${months === 1 ? 'mes' : 'meses'}`;
+  const years = Math.floor(months / 12);
+  return `hace ${years} año${years === 1 ? '' : 's'}`;
+}
 
 export default function PacientesPage() {
   const router = useRouter();
   const [q, setQ] = useState('');
   const [patients, setPatients] = useState<PatientRow[]>([]);
+  const [lastVisits, setLastVisits] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNew, setShowNew] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from('patients')
-      .select('id, name, age, phone, email, skin_type, tags, alerts')
-      .order('name')
-      .then(({ data, error: err }) => {
-        if (err) setError(err.message);
-        else setPatients((data as PatientRow[]) ?? []);
-        setLoading(false);
-      });
+    const todayISO = new Date().toLocaleDateString('sv-SE'); // "YYYY-MM-DD" local
+
+    Promise.all([
+      supabase
+        .from('patients')
+        .select('id, name, age, phone, email, skin_type, tags, alerts')
+        .order('name'),
+      // Turnos ya pasados que no se cancelaron ni quedaron ausentes: el más
+      // reciente de cada paciente es su última visita.
+      supabase
+        .from('appointments')
+        .select('patient_id, date')
+        .in('status', BLOCKING_STATUSES)
+        .lte('date', todayISO)
+        .order('date', { ascending: false }),
+    ]).then(([patRes, apptRes]) => {
+      if (patRes.error) setError(patRes.error.message);
+      else setPatients((patRes.data as PatientRow[]) ?? []);
+
+      const seen: Record<string, string> = {};
+      for (const a of (apptRes.data as { patient_id: string; date: string }[]) ?? []) {
+        if (a.patient_id && !seen[a.patient_id]) seen[a.patient_id] = a.date;
+      }
+      setLastVisits(seen);
+
+      setLoading(false);
+    });
   }, []);
 
   const filtered = patients.filter(p =>
@@ -90,6 +122,11 @@ export default function PacientesPage() {
                   <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ink)' }}>{p.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 2 }}>
                     {[p.age ? `${p.age} años` : null, p.skin_type].filter(Boolean).join(' · ')}
+                  </div>
+                  <div style={{ fontSize: 11.5, marginTop: 3, color: lastVisits[p.id] ? 'var(--muted)' : 'var(--faint)' }}>
+                    {lastVisits[p.id]
+                      ? <>Última visita <strong style={{ color: 'var(--emerald)' }}>{sinceLabel(lastVisits[p.id])}</strong></>
+                      : 'Todavía no vino'}
                   </div>
                   {((p.tags?.length ?? 0) > 0 || (p.alerts?.length ?? 0) > 0) && (
                     <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>

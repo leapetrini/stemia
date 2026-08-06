@@ -52,7 +52,11 @@ function addDays(d: Date, n: number) {
 
 export default function AgendaPage() {
   const router = useRouter();
-  const [selectedDate, setSelectedDate] = useState(toISO(new Date()));
+  const todayISO = toISO(new Date());
+  const [selectedDate, setSelectedDate] = useState(todayISO);
+  // Primer día de la tira. Arranca dos días hábiles antes de hoy para que el
+  // día de ayer quede a la vista sin tener que navegar.
+  const [anchor, setAnchor] = useState(() => toISO(addDays(new Date(), -2)));
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -104,10 +108,12 @@ export default function AgendaPage() {
     setShowNew(true);
   };
 
+  // La tira de días arranca en `anchor` y muestra 14 días hábiles. Las flechas
+  // la corren de a una semana, así la doctora puede mirar turnos viejos para
+  // ver cuándo vino por última vez una paciente.
   const days = useMemo(() => {
-    const result: { iso: string; label: string; day: number }[] = [];
-    const cursor = new Date();
-    cursor.setHours(0, 0, 0, 0);
+    const result: { iso: string; label: string; day: number; month: string }[] = [];
+    const cursor = new Date(anchor + 'T12:00:00');
     while (result.length < 14) {
       const dow = cursor.getDay();
       if (dow !== 0 && dow !== 6) {
@@ -115,12 +121,23 @@ export default function AgendaPage() {
           iso: toISO(cursor),
           label: cursor.toLocaleDateString('es-AR', { weekday: 'short' }),
           day: cursor.getDate(),
+          month: cursor.toLocaleDateString('es-AR', { month: 'short' }),
         });
       }
       cursor.setDate(cursor.getDate() + 1);
     }
     return result;
-  }, []);
+  }, [anchor]);
+
+  // Saltar a una fecha cualquiera: se selecciona y se centra la tira en su semana.
+  const jumpTo = (iso: string) => {
+    if (!iso) return;
+    setSelectedDate(iso);
+    const d = new Date(iso + 'T12:00:00');
+    setAnchor(toISO(addDays(d, -2)));
+  };
+
+  const isToday = selectedDate === todayISO;
 
   const selectedLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-AR', {
     weekday: 'long', day: 'numeric', month: 'long',
@@ -156,22 +173,57 @@ export default function AgendaPage() {
           </button>
         </div>
 
+        {/* Navegación: semana anterior / siguiente, salto por fecha y volver a hoy */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
+          <button onClick={() => setAnchor(toISO(addDays(new Date(anchor + 'T12:00:00'), -7)))}
+            className="iconbtn" style={{ width: 32, height: 32 }} title="Semana anterior">
+            <Icon name="chevL" size={15} />
+          </button>
+          <button onClick={() => setAnchor(toISO(addDays(new Date(anchor + 'T12:00:00'), 7)))}
+            className="iconbtn" style={{ width: 32, height: 32 }} title="Semana siguiente">
+            <Icon name="chevR" size={15} />
+          </button>
+
+          <input type="date" value={selectedDate} onChange={e => jumpTo(e.target.value)}
+            title="Ir a una fecha"
+            style={{
+              padding: '6px 10px', borderRadius: 99, border: '1.5px solid var(--line)',
+              background: 'var(--surface)', color: 'var(--muted)',
+              fontFamily: 'var(--sans)', fontSize: 12.5, cursor: 'pointer',
+            }} />
+
+          {!isToday && (
+            <button onClick={() => jumpTo(todayISO)}
+              style={{
+                padding: '6px 14px', borderRadius: 99, border: 'none',
+                background: 'var(--emerald-tint)', color: 'var(--emerald)',
+                fontFamily: 'var(--sans)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+              }}>
+              Hoy
+            </button>
+          )}
+        </div>
+
         {/* Date strip — 14 working days, no sticky hover */}
-        <div style={{ display: 'flex', gap: 4, marginTop: 14, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
+        <div style={{ display: 'flex', gap: 4, marginTop: 10, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
           {days.map(d => {
             const active = d.iso === selectedDate;
+            const past = d.iso < todayISO;
+            const isTodayCell = d.iso === todayISO;
             return (
               <button key={d.iso} onClick={() => setSelectedDate(d.iso)}
                 style={{
                   flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  gap: 3, padding: '8px 11px', borderRadius: 12, border: 'none', cursor: 'pointer',
+                  gap: 2, padding: '7px 11px', borderRadius: 12, cursor: 'pointer',
+                  border: isTodayCell && !active ? '1.5px solid var(--emerald)' : '1.5px solid transparent',
                   background: active ? 'var(--emerald)' : 'transparent',
-                  color: active ? '#fff' : 'var(--muted)',
+                  color: active ? '#fff' : past ? 'var(--faint)' : 'var(--muted)',
                   fontFamily: 'var(--sans)', transition: 'background .15s, color .15s',
                   outline: 'none',
                 }}>
                 <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>{d.label}</span>
                 <span style={{ fontSize: 20, fontWeight: 700, lineHeight: 1 }}>{d.day}</span>
+                <span style={{ fontSize: 9, fontWeight: 600, opacity: .75, textTransform: 'uppercase' }}>{d.month}</span>
               </button>
             );
           })}
