@@ -374,6 +374,8 @@ export default function AgendaConfigPage() {
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3 }}>
                 Por defecto la agenda está cerrada. Activá las quincenas que querés abrir.
+                Abren solo de lunes a viernes: para atender un sábado, tocalo en el
+                calendario de abajo.
               </div>
             </div>
 
@@ -492,7 +494,9 @@ export default function AgendaConfigPage() {
                   const isOpen = openDates.has(dateISO);
                   const isToday = dateISO === todayISO;
                   const isSel = selDay === dateISO;
-                  const canClick = !isWeekend && !isPast;
+                  // Los fines de semana se pueden abrir de a uno. Lo que no
+                  // hacen es abrirse solos con las quincenas.
+                  const canClick = !isPast;
                   const hasBlocks = isOpen && baseSlots.some(t => blocked.has(`${dateISO}|${t}`));
                   const apptCount = bookedByDate.get(dateISO)?.length ?? 0;
 
@@ -517,7 +521,9 @@ export default function AgendaConfigPage() {
                           : 'var(--ink)',
                         fontSize: 12, fontWeight: isOpen ? 700 : 400,
                         cursor: canClick ? 'pointer' : 'default',
-                        opacity: (isWeekend || isPast) ? 0.3 : 1,
+                        // El fin de semana cerrado se ve apagado, pero si está
+                        // abierto tiene que verse igual que cualquier otro día.
+                        opacity: isPast ? 0.3 : (isWeekend && !isOpen) ? 0.45 : 1,
                         transition: 'background .15s, color .15s, border .15s',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         outline: 'none', position: 'relative',

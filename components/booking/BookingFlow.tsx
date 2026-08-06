@@ -21,29 +21,29 @@ interface Day {
   state: 'libre' | 'ocupado' | 'cerrado';
 }
 
+// Días corridos desde el lunes de esta semana, fines de semana incluidos. Antes
+// se salteaban los días sin lugar y la tira pasaba del 8 al 11, que confunde.
+// Ahora están todos y los que no se pueden elegir van reducidos y apagados.
 function genDays(n = 30): Day[] {
   const days: Day[] = [];
-  let idx = 0;
   const cursor = new Date();
   cursor.setHours(0, 0, 0, 0);
+  // Alinear a lunes para que cada ventana de 7 se lea como una semana
+  cursor.setDate(cursor.getDate() + (cursor.getDay() === 0 ? -6 : 1 - cursor.getDay()));
 
-  while (days.length < n) {
-    const dow = cursor.getDay();
-    if (dow !== 0 && dow !== 6) {
-      const y = cursor.getFullYear();
-      const m = String(cursor.getMonth() + 1).padStart(2, '0');
-      const d = String(cursor.getDate()).padStart(2, '0');
-      days.push({
-        idx,
-        date: new Date(cursor),
-        dateISO: `${y}-${m}-${d}`,
-        day: cursor.getDate(),
-        dayName: DAY_NAMES[dow],
-        month: MONTH_NAMES[cursor.getMonth()],
-        state: 'libre',
-      });
-      idx++;
-    }
+  for (let idx = 0; idx < n; idx++) {
+    const y = cursor.getFullYear();
+    const m = String(cursor.getMonth() + 1).padStart(2, '0');
+    const d = String(cursor.getDate()).padStart(2, '0');
+    days.push({
+      idx,
+      date: new Date(cursor),
+      dateISO: `${y}-${m}-${d}`,
+      day: cursor.getDate(),
+      dayName: DAY_NAMES[cursor.getDay()],
+      month: MONTH_NAMES[cursor.getMonth()],
+      state: 'libre',
+    });
     cursor.setDate(cursor.getDate() + 1);
   }
   return days;
@@ -211,14 +211,15 @@ function ProfessionalPicker({ professionals, service, selected, onSelect }: {
 
 // ── Step 3: fecha y hora ────────────────────────────────────────
 function DateTimePicker({ service, onSelect }: { service: Service | null; onSelect: (v: { day: Day; time: string }) => void }) {
-  const allDays = useMemo(() => genDays(120), []);
+  const allDays = useMemo(() => genDays(126), []); // 18 semanas justas
   const [startIdx, setStartIdx] = useState(0);
   const [selDay, setSelDay] = useState<Day | null>(null);
   const [selTime, setSelTime] = useState<string | null>(null);
   const [bookedByDay, setBookedByDay] = useState<Record<string, string[]>>({});
   const [blockedByDay, setBlockedByDay] = useState<Record<string, string[]>>({});
   const [schedule, setSchedule] = useState<ScheduleSettings | null>(null);
-  const [availableDays, setAvailableDays] = useState<Day[] | null>(null); // null = loading
+  // Fechas con al menos un horario libre. null = todavía cargando.
+  const [availSet, setAvailSet] = useState<Set<string> | null>(null);
 
   // Horarios base según el horario de atención configurado por la doctora.
   const baseSlots = useMemo(() => generateSlots(schedule), [schedule]);
@@ -236,7 +237,7 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
   useEffect(() => {
     const startISO = allDays[0]?.dateISO;
     const endISO = allDays[allDays.length - 1]?.dateISO;
-    if (!startISO || !endISO) { setAvailableDays([]); return; }
+    if (!startISO || !endISO) return;
 
     Promise.all([
       // Solo los turnos activos tapan el horario: uno cancelado o ausente lo
@@ -267,7 +268,8 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
 
       const openDays = new Set((availRes.data ?? []).map((a: { date: string }) => a.date));
 
-      const filtered = allDays.filter(day => {
+      const withRoom = allDays.filter(day => {
+        if (day.dateISO < todayISO) return false;
         if (!openDays.has(day.dateISO)) return false;
         const dayBooked = byDay[day.dateISO] ?? [];
         const dayBlocked = blocked[day.dateISO] ?? [];
@@ -278,11 +280,21 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
         });
       });
 
-      setAvailableDays(filtered);
+      setAvailSet(new Set(withRoom.map(d => d.dateISO)));
     });
   }, [allDays, todayISO, nowHHMM]);
 
-  const visible = (availableDays ?? []).slice(startIdx, startIdx + 5);
+  // La tira muestra los días corridos hasta la semana del último día con lugar.
+  // Más allá sería todo gris, y antes de eso los días sin lugar se salteaban:
+  // la tira pasaba del 8 al 11 y confundía.
+  const stripDays = useMemo(() => {
+    if (!availSet || availSet.size === 0) return [];
+    let last = 0;
+    allDays.forEach((d, i) => { if (availSet.has(d.dateISO)) last = i; });
+    return allDays.slice(0, Math.min(allDays.length, Math.ceil((last + 1) / 7) * 7));
+  }, [allDays, availSet]);
+
+  const visible = stripDays.slice(startIdx, startIdx + 7);
 
   // Mes (+ año) de la ventana visible, en grande. Si abarca dos meses, los une.
   const monthLabel = useMemo(() => {
@@ -310,7 +322,7 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
     if (selDay && selTime) onSelect({ day: selDay, time: selTime });
   }, [selDay, selTime, onSelect]);
 
-  const totalAvail = availableDays?.length ?? 0;
+  const totalDays = stripDays.length;
   const free = (service?.price ?? 0) === 0;
 
   return (
@@ -344,47 +356,54 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
           )}
         </div>
 
-        {availableDays === null ? (
+        {availSet === null ? (
           // Skeleton
-          <div style={{ display: 'flex', gap: 5, padding: '0 10px' }}>
-            {[0,1,2,3,4].map(i => (
-              <div key={i} style={{ flex: 1, height: 70, borderRadius: 12, background: 'var(--surface-2)', opacity: 0.6 + i * 0.08 }} />
+          <div style={{ display: 'flex', gap: 4, padding: '0 10px' }}>
+            {[0,1,2,3,4,5,6].map(i => (
+              <div key={i} style={{ flex: 1, height: 62, borderRadius: 12, background: 'var(--surface-2)', opacity: 0.6 + i * 0.05 }} />
             ))}
           </div>
-        ) : availableDays.length === 0 ? (
+        ) : totalDays === 0 ? (
           <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--faint)', fontSize: 13, lineHeight: 1.6 }}>
             No hay turnos disponibles<br />en este momento.
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '0 10px' }}>
-            <button onClick={() => setStartIdx(Math.max(0, startIdx - 5))} disabled={startIdx === 0}
-              className="iconbtn" style={{ width: 32, height: 32, flexShrink: 0, opacity: startIdx === 0 ? 0.25 : 1 }}>
-              <Icon name="chevL" size={15} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '0 10px' }}>
+            <button onClick={() => setStartIdx(Math.max(0, startIdx - 7))} disabled={startIdx === 0}
+              className="iconbtn" style={{ width: 30, height: 30, flexShrink: 0, opacity: startIdx === 0 ? 0.25 : 1 }}>
+              <Icon name="chevL" size={14} />
             </button>
 
-            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5 }}>
+            {/* Semana completa: los días sin lugar se ven apagados y no se
+                pueden tocar, pero están, así los números van corridos. */}
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
               {visible.map(d => {
                 const isSel = selDay?.idx === d.idx;
+                const canPick = availSet.has(d.dateISO);
                 return (
-                  <button key={d.idx} onClick={() => { setSelDay(d); setSelTime(null); }}
+                  <button key={d.idx} disabled={!canPick}
+                    onClick={() => { setSelDay(d); setSelTime(null); }}
+                    title={canPick ? undefined : 'Sin turnos disponibles'}
                     style={{
-                      width: '100%', padding: '10px 2px', borderRadius: 12, textAlign: 'center' as const,
-                      background: isSel ? 'var(--emerald)' : '#e8f5ef',
-                      border: `1.5px solid ${isSel ? 'transparent' : '#b7ddc8'}`,
-                      color: isSel ? '#fff' : 'var(--emerald)',
-                      cursor: 'pointer', transition: 'all .12s',
+                      width: '100%', padding: canPick ? '9px 1px' : '7px 1px',
+                      borderRadius: 10, textAlign: 'center' as const,
+                      background: isSel ? 'var(--emerald)' : canPick ? '#e8f5ef' : 'transparent',
+                      border: `1.5px solid ${isSel ? 'transparent' : canPick ? '#b7ddc8' : 'var(--line)'}`,
+                      color: isSel ? '#fff' : canPick ? 'var(--emerald)' : 'var(--faint)',
+                      opacity: canPick ? 1 : 0.5,
+                      cursor: canPick ? 'pointer' : 'default', transition: 'all .12s',
                     }}>
-                    <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase' as const, opacity: .8 }}>{d.dayName}</div>
-                    <div style={{ fontSize: 17, fontWeight: 700, lineHeight: 1.2 }}>{d.day}</div>
+                    <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase' as const, opacity: .8 }}>{d.dayName}</div>
+                    <div style={{ fontSize: canPick ? 16 : 13, fontWeight: 700, lineHeight: 1.2 }}>{d.day}</div>
                   </button>
                 );
               })}
             </div>
 
-            <button onClick={() => setStartIdx(Math.min(totalAvail - 5, startIdx + 5))}
-              disabled={startIdx + 5 >= totalAvail}
-              className="iconbtn" style={{ width: 32, height: 32, flexShrink: 0, opacity: startIdx + 5 >= totalAvail ? 0.25 : 1 }}>
-              <Icon name="chevR" size={15} />
+            <button onClick={() => setStartIdx(Math.min(Math.max(0, totalDays - 7), startIdx + 7))}
+              disabled={startIdx + 7 >= totalDays}
+              className="iconbtn" style={{ width: 30, height: 30, flexShrink: 0, opacity: startIdx + 7 >= totalDays ? 0.25 : 1 }}>
+              <Icon name="chevR" size={14} />
             </button>
           </div>
         )}
@@ -411,7 +430,7 @@ function DateTimePicker({ service, onSelect }: { service: Service | null; onSele
         </div>
       )}
 
-      {!selDay && availableDays !== null && availableDays.length > 0 && (
+      {!selDay && availSet !== null && totalDays > 0 && (
         <div style={{ padding: '28px 20px 0', textAlign: 'center', color: 'var(--faint)', fontSize: 13 }}>
           Seleccioná una fecha para ver los horarios disponibles
         </div>
