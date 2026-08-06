@@ -136,7 +136,7 @@ function ServiceCard({ service, selected, onSelect }: {
 
       {service.description && (
         <div className="svc-card__desc">
-          <ExpandableText text={service.description} collapsedHeight={72} />
+          <ExpandableText text={service.description} collapsedHeight={92} />
         </div>
       )}
     </div>

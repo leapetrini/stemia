@@ -169,7 +169,9 @@ export function ExpandableText({ text, collapsedHeight = 76, className }: Expand
   // Un par de píxeles de más no justifican un "Ver más"
   const clipped = fullHeight > collapsedHeight + 12;
   const collapsed = clipped && !open;
-  const fade = 'linear-gradient(to bottom, #000 45%, transparent 100%)';
+  // El fundido arranca tarde a propósito: si empieza antes, la última línea
+  // visible queda tan transparente que no se puede leer.
+  const fade = 'linear-gradient(to bottom, #000 72%, transparent 100%)';
 
   return (
     <div className={className}>
