@@ -61,7 +61,9 @@ const STEPS = [
   { n: 4, label: 'Confirmar' },
 ];
 
-function StepIndicator({ step }: { step: number }) {
+// Los pasos ya completados son botones: tocarlos vuelve atrás. Es donde la
+// gente busca volver, antes solo había un botón al pie de la pantalla.
+function StepIndicator({ step, onGoTo }: { step: number; onGoTo: (n: number) => void }) {
   return (
     <div style={{ padding: '12px 20px', borderBottom: '1px solid var(--line)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
@@ -71,21 +73,28 @@ function StepIndicator({ step }: { step: number }) {
         </span>
       </div>
       <div style={{ display: 'flex', gap: 5 }}>
-        {STEPS.map(s => (
-          <div key={s.n} style={{
-            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            padding: '7px 6px', borderRadius: 999, minWidth: 0,
-            background: step === s.n ? 'var(--emerald)' : step > s.n ? 'var(--emerald-tint)' : 'var(--surface-2)',
-            border: `1px solid ${step === s.n ? 'transparent' : step > s.n ? 'var(--emerald-tint-2)' : 'var(--line)'}`,
-            fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden',
-            color: step === s.n ? '#fff' : step > s.n ? 'var(--emerald)' : 'var(--muted)',
-          }}>
-            {step > s.n
-              ? <Icon name="check" size={11} color="var(--emerald)" stroke={2.5} />
-              : <span style={{ fontWeight: 700 }}>{s.n}</span>}
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.label}</span>
-          </div>
-        ))}
+        {STEPS.map(s => {
+          const done = step > s.n;
+          return (
+            <button key={s.n} type="button" disabled={!done}
+              onClick={() => onGoTo(s.n)}
+              title={done ? `Volver a ${s.label.toLowerCase()}` : undefined}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                padding: '7px 6px', borderRadius: 999, minWidth: 0, fontFamily: 'var(--sans)',
+                background: step === s.n ? 'var(--emerald)' : done ? 'var(--emerald-tint)' : 'var(--surface-2)',
+                border: `1px solid ${step === s.n ? 'transparent' : done ? 'var(--emerald-tint-2)' : 'var(--line)'}`,
+                fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden',
+                color: step === s.n ? '#fff' : done ? 'var(--emerald)' : 'var(--muted)',
+                cursor: done ? 'pointer' : 'default',
+              }}>
+              {done
+                ? <Icon name="check" size={11} color="var(--emerald)" stroke={2.5} />
+                : <span style={{ fontWeight: 700 }}>{s.n}</span>}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.label}</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );
@@ -210,11 +219,21 @@ function ProfessionalPicker({ professionals, service, selected, onSelect }: {
 }
 
 // ── Step 3: fecha y hora ────────────────────────────────────────
-function DateTimePicker({ service, onSelect }: { service: Service | null; onSelect: (v: { day: Day; time: string }) => void }) {
+function DateTimePicker({ service, value, onSelect }: {
+  service: Service | null;
+  // Lo ya elegido, para no perderlo al volver desde el paso de confirmación.
+  value: { day: Day; time: string } | null;
+  onSelect: (v: { day: Day; time: string }) => void;
+}) {
   const allDays = useMemo(() => genDays(126), []); // 18 semanas justas
-  const [startIdx, setStartIdx] = useState(0);
-  const [selDay, setSelDay] = useState<Day | null>(null);
-  const [selTime, setSelTime] = useState<string | null>(null);
+  const [selDay, setSelDay] = useState<Day | null>(value?.day ?? null);
+  const [selTime, setSelTime] = useState<string | null>(value?.time ?? null);
+  // Si venía con fecha elegida, la tira arranca en la semana de esa fecha.
+  const [startIdx, setStartIdx] = useState(() => {
+    if (!value) return 0;
+    const i = allDays.findIndex(d => d.dateISO === value.day.dateISO);
+    return i >= 0 ? Math.floor(i / 7) * 7 : 0;
+  });
   const [bookedByDay, setBookedByDay] = useState<Record<string, string[]>>({});
   const [blockedByDay, setBlockedByDay] = useState<Record<string, string[]>>({});
   const [schedule, setSchedule] = useState<ScheduleSettings | null>(null);
@@ -591,6 +610,26 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
     });
   }, []);
 
+  // Volver no borra lo ya elegido: solo se limpia lo que dejó de tener sentido
+  // cuando efectivamente se cambia de servicio o de profesional.
+  const canGoBack = step > 1 && step < 5;
+  const goTo = (n: number) => { if (n < step) setStep(n); };
+
+  const pickService = (s: Service) => {
+    if (s.id !== service?.id) {
+      setProfessional(null);
+      setDatetime(null);
+    }
+    setService(s);
+    setStep(2);
+  };
+
+  const pickProfessional = (p: Professional) => {
+    if (p.id !== professional?.id) setDatetime(null);
+    setProfessional(p);
+    setStep(3);
+  };
+
   const onConfirm = async (name: string, email: string, phone: string) => {
     if (!service || !professional || !datetime) return;
     setSending(true);
@@ -616,7 +655,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
         window.location.href = data.init_point;
         return; // se mantiene "Confirmando…" hasta que el navegador navega
       }
-    } catch (_) {
+    } catch {
       setSending(false);
       setBookingError('No se pudo conectar. Verificá tu conexión e intentá de nuevo.');
       return;
@@ -630,8 +669,12 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-tint)', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ padding: 'var(--safe-top) 16px 14px', borderBottom: '1px solid var(--line)', background: 'var(--surface)', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        <button className="iconbtn" onClick={onClose} style={{ flexShrink: 0 }}>
-          <Icon name="x" size={18} />
+        {/* En los pasos intermedios la flecha vuelve atrás y la X pasa a la
+            derecha, que es como funciona cualquier app del teléfono. */}
+        <button className="iconbtn" style={{ flexShrink: 0 }}
+          title={canGoBack ? 'Volver' : 'Cerrar'}
+          onClick={() => (canGoBack ? setStep(step - 1) : onClose())}>
+          <Icon name={canGoBack ? 'chevL' : 'x'} size={18} />
         </button>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
           {professional ? (
@@ -655,14 +698,19 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
             </div>
           )}
         </div>
+
+        {canGoBack && (
+          <button className="iconbtn" onClick={onClose} title="Cerrar" style={{ flexShrink: 0 }}>
+            <Icon name="x" size={18} />
+          </button>
+        )}
       </div>
 
-      {step < 5 && <StepIndicator step={step} />}
+      {step < 5 && <StepIndicator step={step} onGoTo={goTo} />}
 
       <div key={step} className="step-anim" style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
         {step === 1 && (
-          <ServicePicker services={services} selected={service}
-            onSelect={s => { setService(s); setStep(2); }} />
+          <ServicePicker services={services} selected={service} onSelect={pickService} />
         )}
         {step === 2 && (
           // Cada servicio lo realiza su profesional. Si el servicio no tiene
@@ -674,9 +722,9 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
                 : professionals
             }
             service={service} selected={professional}
-            onSelect={p => { setProfessional(p); setStep(3); }} />
+            onSelect={pickProfessional} />
         )}
-        {step === 3 && <DateTimePicker service={service} onSelect={setDatetime} />}
+        {step === 3 && <DateTimePicker service={service} value={datetime} onSelect={setDatetime} />}
         {step === 4 && service && professional && datetime && (
           <BookingConfirmation
             service={service}
@@ -703,7 +751,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
       )}
       {step === 3 && (
         <div style={{ padding: '12px 20px calc(12px + var(--safe-bottom))', borderTop: '1px solid var(--line)', background: 'rgba(255,255,255,.94)', backdropFilter: 'blur(12px)', flexShrink: 0, display: 'flex', gap: 10 }}>
-          <button className="btn btn--ghost" style={{ fontSize: 13 }} onClick={() => { setDatetime(null); setStep(2); }}>
+          <button className="btn btn--ghost" style={{ fontSize: 13 }} onClick={() => setStep(2)}>
             <Icon name="chevL" size={15} /> Volver
           </button>
           <button className="btn btn--primary" style={{ flex: 1 }} onClick={() => setStep(4)}
