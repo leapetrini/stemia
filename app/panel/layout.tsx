@@ -135,8 +135,11 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
             </button>
           </div>
 
-          {/* min-h-0 para que el scroll viva dentro de cada pantalla. */}
-          <div className="flex-1 min-h-0">{children}</div>
+          {/* Scroll de respaldo: las pantallas portadas traen el suyo propio
+              (con h-full adentro, así que este nunca se activa para ellas), pero
+              las que todavía tienen el markup viejo dependen de este. Sin esto
+              quedan cortadas. */}
+          <div className="flex-1 min-h-0 overflow-y-auto">{children}</div>
 
           {/* Tab bar · mobile */}
           <nav className="md:hidden shrink-0 flex items-stretch border-t border-champagne/50 bg-ivory">

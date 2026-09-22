@@ -579,6 +579,8 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
 
             <input
               required
+              name="name"
+              autoComplete="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Nombre y apellido"
@@ -586,6 +588,8 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
             />
             <input
               required
+              name="email"
+              autoComplete="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -594,6 +598,8 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
             />
             <input
               required
+              name="tel"
+              autoComplete="tel"
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
