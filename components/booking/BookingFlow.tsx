@@ -88,6 +88,8 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
   const [sending, setSending] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [calendarioAbierto, setCalendarioAbierto] = useState(true);
+  // Qué tarjeta de tratamiento tiene la descripción desplegada.
+  const [expandida, setExpandida] = useState<string | null>(null);
 
   // ── Disponibilidad ────────────────────────────────────────────
   // Todo este bloque es el de siempre: sale de Supabase y manda sobre qué
@@ -384,21 +386,35 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
           {step === 1 && (
             <div key="lista-svc" className="flex flex-col gap-2.5">
               {cargando && <Cargando texto="Buscando tratamientos…" />}
-              {services?.map((s) => (
+              {services?.map((s) => {
+                // Las descripciones reales son párrafos largos. Si el texto no
+                // entra, el primer toque lo despliega y el segundo elige: así
+                // nadie reserva sin haber podido leer qué incluye. Cuando el
+                // texto es corto no hay nada que desplegar y elige de una.
+                const larga = (s.description?.length ?? 0) > 160;
+                const abierta = expandida === s.id;
+                const desplegar = larga && !abierta;
+
+                return (
                 <motion.button
                   key={s.id}
                   layoutId={`svc-${s.id}`}
                   exit={{ opacity: 0, transform: 'scale(0.98)' }}
                   transition={MORFEO}
                   type="button"
-                  onClick={() => pickService(s)}
+                  onClick={() => (desplegar ? setExpandida(s.id) : pickService(s))}
                   className="pressable w-full text-left p-4 md:p-5 rounded-[1.2rem] md:rounded-[1.5rem] bg-ivory hover:bg-porcelain border border-champagne/50 flex items-center gap-4 cursor-pointer"
                 >
                   <span className="flex-1 min-w-0 block">
                     <span className="block text-[15px] md:text-[17px] text-espresso">{s.name}</span>
                     {s.description && (
-                      <span className="text-[12px] md:text-[13px] text-moca leading-relaxed mt-1 line-clamp-3">
+                      <span className={`text-[12px] md:text-[13px] text-moca leading-relaxed mt-1 ${abierta ? 'block whitespace-pre-line' : 'line-clamp-3'}`}>
                         {s.description}
+                      </span>
+                    )}
+                    {larga && (
+                      <span className="block text-[11px] text-espresso mt-1.5">
+                        {abierta ? 'Tocá de nuevo para elegirlo' : 'Ver todo'}
                       </span>
                     )}
                     <span className="flex flex-wrap items-center gap-2 mt-3">
@@ -416,7 +432,8 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
                   </span>
                   <ChevronRight className="w-5 h-5 shrink-0 text-taupe" />
                 </motion.button>
-              ))}
+                );
+              })}
             </div>
           )}
         </AnimatePresence>
