@@ -648,31 +648,47 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
 
         {/* CONSENTIMIENTO TAB */}
         {tab === 'consentimiento' && (
-          <div style={{ marginTop: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-              <button className="btn btn--gold btn--sm" onClick={() => window.print()}>
-                <Icon name="printer" size={14} color="#fff" /> Imprimir
+          <div className="mt-4 flex flex-col gap-3">
+            <div className="flex justify-end no-print">
+              <button
+                onClick={() => window.print()}
+                className="pressable flex items-center gap-2 bg-espresso/90 text-ivory rounded-full px-5 py-2 hover:bg-espresso border-0 cursor-pointer"
+              >
+                <span className="text-[13px]">Imprimir</span>
               </button>
             </div>
-            <div className="card consent-form" style={{ padding: '28px 24px' }}>
-              <div style={{ textAlign: 'center', marginBottom: 20, paddingBottom: 18, borderBottom: '1px solid var(--line)' }}>
-                <p style={{ margin: 0, fontSize: 10, fontWeight: 700, letterSpacing: '.14em', color: 'var(--muted)', textTransform: 'uppercase' }}>Stemia · Medicina estética · Neuquén Capital</p>
-                <h2 style={{ margin: '8px 0 0', fontSize: 20, fontFamily: 'var(--serif)', color: 'var(--ink)', fontWeight: 600 }}>Acta de Consentimiento Informado</h2>
+
+            {/* Se lee como el papel que va a salir impreso: ancho de hoja,
+                fondo claro y margen generoso. Antes era una tarjeta más del
+                panel y no se entendía que era un documento. */}
+            <div className="consent-form mx-auto w-full max-w-[760px] bg-ivory border border-champagne/50 rounded-[1.25rem] px-7 py-8 md:px-12 md:py-12">
+              <div className="text-center pb-5 mb-6 border-b border-champagne/60">
+                <p className="text-[10px] tracking-[0.14em] uppercase text-moca m-0">
+                  Stemia · Medicina estética · Neuquén Capital
+                </p>
+                <h2 className="text-[22px] md:text-[26px] text-espresso tracking-tight mt-2 mb-0">
+                  Acta de Consentimiento Informado
+                </h2>
               </div>
-              <p style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.7, marginBottom: 16 }}>
+
+              <p className="text-[14px] text-espresso leading-[1.8] mb-5">
                 Yo, <strong>{patient.name}</strong>{patient.age ? `, de ${patient.age} años de edad` : ''}, domiciliado/a en la ciudad de Neuquén Capital, en pleno uso de mis facultades, declaro haber recibido información completa y comprensible acerca del tratamiento médico estético a realizar por la <strong>Dra. Valentina Calvo (M.P. _________)</strong>.
               </p>
-              <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '14px 16px', marginBottom: 18 }}>
-                <p style={{ margin: '0 0 10px', fontSize: 10, fontWeight: 700, letterSpacing: '.1em', color: 'var(--muted)', textTransform: 'uppercase' }}>Datos del/la paciente</p>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px', fontSize: 13 }}>
-                  <div><span style={{ color: 'var(--muted)' }}>Nombre: </span>{patient.name}</div>
-                  <div><span style={{ color: 'var(--muted)' }}>Edad: </span>{patient.age ?? '—'}</div>
-                  <div><span style={{ color: 'var(--muted)' }}>Teléfono: </span>{patient.phone ?? '—'}</div>
-                  <div><span style={{ color: 'var(--muted)' }}>Email: </span>{patient.email ?? '—'}</div>
+
+              <div className="bg-porcelain rounded-[1rem] px-5 py-4 mb-6">
+                <p className="text-[10px] tracking-[0.1em] uppercase text-moca m-0 mb-3">
+                  Datos del/la paciente
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-1.5 gap-x-8 text-[13.5px] text-espresso">
+                  <div><span className="text-moca">Nombre: </span>{patient.name}</div>
+                  <div><span className="text-moca">Edad: </span>{patient.age ?? '—'}</div>
+                  <div><span className="text-moca">Teléfono: </span>{patient.phone ?? '—'}</div>
+                  <div><span className="text-moca">Email: </span>{patient.email ?? '—'}</div>
                 </div>
               </div>
-              <p style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.7, marginBottom: 10 }}><strong>He sido informado/a sobre:</strong></p>
-              <ul style={{ fontSize: 13, color: 'var(--ink)', paddingLeft: 20, lineHeight: 1.8, marginBottom: 18 }}>
+
+              <p className="text-[14px] text-espresso leading-[1.8] mb-2"><strong>He sido informado/a sobre:</strong></p>
+              <ul className="text-[13.5px] text-espresso leading-[1.9] pl-5 mb-6 list-disc">
                 <li>La naturaleza del procedimiento a realizar, sus objetivos y técnicas empleadas.</li>
                 <li>Los beneficios esperados y los posibles resultados del tratamiento.</li>
                 <li>Los riesgos, complicaciones e inconvenientes previsibles y sus consecuencias.</li>
@@ -680,33 +696,33 @@ export default function PatientDetailPage({ params }: { params: Promise<{ id: st
                 <li>Las consecuencias previsibles de no realizar el tratamiento propuesto.</li>
                 <li>Los cuidados necesarios antes y después del procedimiento.</li>
               </ul>
-              <p style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.7, marginBottom: 16 }}>
+
+              <p className="text-[14px] text-espresso leading-[1.8] mb-5">
                 Declaro haber tenido la oportunidad de realizar todas las preguntas que consideré necesarias, obteniendo respuestas satisfactorias. Entiendo que puedo revocar este consentimiento en cualquier momento previo al inicio del procedimiento.
               </p>
-              <div style={{ fontSize: 13.5, color: 'var(--ink)', lineHeight: 1.7, marginBottom: 20, padding: '12px 16px', background: 'var(--surface-2)', borderRadius: 8, borderLeft: '3px solid var(--emerald)' }}>
+
+              <div className="text-[14px] text-espresso leading-[1.8] mb-8 px-5 py-4 bg-porcelain rounded-[1rem] border-l-[3px] border-espresso">
                 <strong>Contraindicaciones declaradas:</strong>{' '}
                 {patient.alerts?.join(', ') || 'Ninguna referida por el/la paciente.'}
               </div>
-              <div style={{ marginTop: 36, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ borderTop: '1.5px solid var(--ink)', paddingTop: 10 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                      Firma del/la paciente<br />
-                      <span style={{ fontStyle: 'italic', fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--ink)' }}>{patient.name}</span>
-                    </div>
+
+              <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-10 sm:gap-8">
+                <div className="text-center">
+                  <div className="border-t-[1.5px] border-espresso pt-2.5 text-[12px] text-moca leading-relaxed">
+                    Firma del/la paciente<br />
+                    <span className="text-[14px] text-espresso">{patient.name}</span>
                   </div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ borderTop: '1.5px solid var(--ink)', paddingTop: 10 }}>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
-                      Firma y sello profesional<br />
-                      <span style={{ fontStyle: 'italic', fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--ink)' }}>Dra. Valentina Calvo</span>
-                    </div>
+                <div className="text-center">
+                  <div className="border-t-[1.5px] border-espresso pt-2.5 text-[12px] text-moca leading-relaxed">
+                    Firma y sello profesional<br />
+                    <span className="text-[14px] text-espresso">Dra. Valentina Calvo</span>
                   </div>
                 </div>
               </div>
-              <div style={{ marginTop: 28, textAlign: 'center' }}>
-                <span style={{ fontSize: 13, color: 'var(--muted)', borderTop: '1px solid var(--line)', paddingTop: 12, display: 'inline-block' }}>
+
+              <div className="mt-8 text-center">
+                <span className="text-[13px] text-moca border-t border-champagne/60 pt-3 inline-block">
                   Fecha: Neuquén Capital, _______ de _____________________ de 20 ______
                 </span>
               </div>
