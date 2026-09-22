@@ -2,9 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
+import { Check, ChevronLeft, ChevronRight, LoaderCircle, Lock, Plus, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/Avatar';
 import { NewAppointmentModal } from '@/components/panel/NewAppointmentModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { generateSlots, type ScheduleSettings } from '@/lib/slots';
@@ -29,14 +29,20 @@ const STATUS_LABEL: Record<string, string> = {
   ausente: 'No vino',
   cancelado: 'Cancelado',
 };
+
 const STATUS_CHIP: Record<string, string> = {
-  confirmado: 'chip--gold',
-  pendiente: 'chip--silver',
-  'en-sala': 'chip--silver',
-  completado: 'chip--emerald',
-  ausente: 'chip--danger',
-  cancelado: 'chip--danger',
+  confirmado: 'bg-espresso/10 text-espresso',
+  pendiente: 'bg-champagne/40 text-moca',
+  'en-sala': 'bg-champagne/40 text-moca',
+  completado: 'bg-espresso/10 text-espresso',
+  ausente: 'bg-terracota/10 text-terracota',
+  cancelado: 'bg-terracota/10 text-terracota',
 };
+
+// Estos tres ya no se tocan: el turno terminó de una manera o de otra.
+const CERRADOS = ['completado', 'ausente', 'cancelado'];
+
+const STRIP_DAYS = 21; // 3 semanas corridas: la anterior, la actual y la siguiente
 
 function toISO(d: Date) {
   const y = d.getFullYear();
@@ -46,32 +52,26 @@ function toISO(d: Date) {
 }
 
 function addDays(d: Date, n: number) {
-  const r = new Date(d);
-  r.setDate(r.getDate() + n);
-  return r;
+  const c = new Date(d);
+  c.setDate(c.getDate() + n);
+  return c;
 }
 
-// Lunes de la semana de esa fecha. La tira de días se alinea a semanas para que
-// se lea como un calendario y los números vayan corridos.
 function mondayOf(d: Date) {
-  const r = new Date(d);
-  r.setHours(0, 0, 0, 0);
-  const dow = r.getDay(); // 0 = domingo
-  r.setDate(r.getDate() + (dow === 0 ? -6 : 1 - dow));
-  return r;
+  const c = new Date(d);
+  c.setDate(c.getDate() + (c.getDay() === 0 ? -6 : 1 - c.getDay()));
+  return c;
 }
 
-const STRIP_DAYS = 21; // 3 semanas corridas: la anterior, la actual y la siguiente
+function iniciales(name: string) {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
 
 export default function AgendaPage() {
   const router = useRouter();
-  const todayISO = toISO(new Date());
+  const todayISO = useMemo(() => toISO(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(todayISO);
-  // Primer día de la tira: el lunes de la semana pasada, así se ve la semana
-  // anterior, la actual y la siguiente sin navegar.
   const [anchor, setAnchor] = useState(() => toISO(addDays(mondayOf(new Date()), -7)));
-  // Días habilitados para reserva online y cuántos turnos tiene cada día del
-  // rango visible: definen si el día se muestra grande o reducido.
   const [openDates, setOpenDates] = useState<Set<string>>(new Set());
   const [apptCounts, setApptCounts] = useState<Record<string, number>>({});
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
@@ -125,9 +125,8 @@ export default function AgendaPage() {
     setShowNew(true);
   };
 
-  // Días corridos desde `anchor`, fines de semana incluidos. Antes se saltaban
-  // los sábados y domingos y la tira pasaba del 8 al 11, que confundía. Ahora
-  // están todos y los cerrados se muestran reducidos.
+  // Días corridos desde `anchor`, fines de semana incluidos. Si se saltean los
+  // cerrados, la tira pasa del 8 al 11 y confunde.
   const days = useMemo(() => {
     const result: { iso: string; label: string; day: number; month: string; weekend: boolean }[] = [];
     const cursor = new Date(anchor + 'T12:00:00');
@@ -148,8 +147,6 @@ export default function AgendaPage() {
   const rangeStart = days[0].iso;
   const rangeEnd = days[days.length - 1].iso;
 
-  // Qué días están abiertos y cuántos turnos tiene cada uno, para el rango
-  // visible. El setState va dentro del .then, nunca sincrónico en el efecto.
   useEffect(() => {
     Promise.all([
       supabase.from('available_dates').select('date').gte('date', rangeStart).lte('date', rangeEnd),
@@ -165,7 +162,6 @@ export default function AgendaPage() {
     });
   }, [rangeStart, rangeEnd]);
 
-  // Saltar a una fecha cualquiera: se selecciona y la tira se centra en su semana.
   const jumpTo = (iso: string) => {
     if (!iso) return;
     setSelectedDate(iso);
@@ -174,273 +170,273 @@ export default function AgendaPage() {
 
   const isToday = selectedDate === todayISO;
   const selectedOpen = openDates.has(selectedDate);
-
-  const selectedLabel = new Date(selectedDate + 'T12:00:00').toLocaleDateString('es-AR', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  });
+  const fechaLarga = new Date(selectedDate + 'T12:00:00')
+    .toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
     <>
-    <div className="page scr-anim">
-      <div className="scrhead">
-        <div className="scrhead__row">
-          <div>
-            <h1 className="scrhead__title">Agenda</h1>
-            <p className="scrhead__sub" style={{ textTransform: 'capitalize' }}>{selectedLabel}</p>
-          </div>
-          <button className="btn btn--gold btn--sm" onClick={() => openNew()}>
-            <Icon name="plus" size={15} color="#fff" /> Nuevo
-          </button>
-        </div>
+      <div className="h-full flex flex-col">
+        <div className="px-5 md:px-8 pt-4 md:pt-8 pb-3 shrink-0">
+          <div className="flex items-end justify-between gap-4">
+            <div className="flex flex-col">
+              <span className="text-[10px] md:text-[11px] text-moca uppercase tracking-wider">Agenda</span>
+              <h1 className="text-2xl md:text-4xl text-espresso tracking-tight leading-tight first-letter:uppercase">
+                {isToday ? 'Hoy' : fechaLarga}
+              </h1>
+              <span className="text-[12px] md:text-[13px] text-moca mt-0.5">
+                {loading ? '…' : appointments.length === 0
+                  ? 'Sin turnos'
+                  : `${appointments.length} turno${appointments.length > 1 ? 's' : ''}`}
+              </span>
+            </div>
 
-        {/* Sub-tabs */}
-        <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
-          <button
-            style={{ padding: '7px 16px', borderRadius: 99, border: 'none',
-              background: 'var(--emerald)', color: '#fff',
-              fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-            Turnos
-          </button>
-          <button onClick={() => router.push('/panel/agenda/configuracion')}
-            style={{ padding: '7px 16px', borderRadius: 99, border: '1.5px solid var(--line)',
-              background: 'transparent', color: 'var(--muted)',
-              fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13 }}>
-            Configuración
-          </button>
-        </div>
-
-        {/* Navegación: semana anterior / siguiente, salto por fecha y volver a hoy */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14 }}>
-          <button onClick={() => setAnchor(toISO(addDays(new Date(anchor + 'T12:00:00'), -7)))}
-            className="iconbtn" style={{ width: 32, height: 32 }} title="Semana anterior">
-            <Icon name="chevL" size={15} />
-          </button>
-          <button onClick={() => setAnchor(toISO(addDays(new Date(anchor + 'T12:00:00'), 7)))}
-            className="iconbtn" style={{ width: 32, height: 32 }} title="Semana siguiente">
-            <Icon name="chevR" size={15} />
-          </button>
-
-          <input type="date" value={selectedDate} onChange={e => jumpTo(e.target.value)}
-            title="Ir a una fecha"
-            style={{
-              padding: '6px 10px', borderRadius: 99, border: '1.5px solid var(--line)',
-              background: 'var(--surface)', color: 'var(--muted)',
-              fontFamily: 'var(--sans)', fontSize: 12.5, cursor: 'pointer',
-            }} />
-
-          {!isToday && (
-            <button onClick={() => jumpTo(todayISO)}
-              style={{
-                padding: '6px 14px', borderRadius: 99, border: 'none',
-                background: 'var(--emerald-tint)', color: 'var(--emerald)',
-                fontFamily: 'var(--sans)', fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-              }}>
-              Hoy
-            </button>
-          )}
-        </div>
-
-        {/* Tira de días: todos corridos. Los cerrados (fines de semana o días
-            sin habilitar) van reducidos, pero se pueden abrir igual. */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, marginTop: 10, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none' }}>
-          {days.map(d => {
-            const active = d.iso === selectedDate;
-            const past = d.iso < todayISO;
-            const isTodayCell = d.iso === todayISO;
-            const open = openDates.has(d.iso);
-            const count = apptCounts[d.iso] ?? 0;
-            // Un día sin reservas online se muestra chico, salvo que tenga
-            // turnos cargados a mano: eso hay que verlo sí o sí.
-            const small = !open && count === 0;
-
-            return (
-              <button key={d.iso} onClick={() => setSelectedDate(d.iso)}
-                title={
-                  count > 0 ? `${count} turno${count > 1 ? 's' : ''}`
-                  : open ? 'Abierto para reservas'
-                  : d.weekend ? 'Fin de semana · cerrado'
-                  : 'Cerrado para reservas'
-                }
-                style={{
-                  flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  gap: 2, borderRadius: 12, cursor: 'pointer', position: 'relative',
-                  padding: small ? '6px 7px' : '7px 11px',
-                  border: isTodayCell && !active ? '1.5px solid var(--emerald)' : '1.5px solid transparent',
-                  background: active ? 'var(--emerald)' : 'transparent',
-                  color: active ? '#fff' : past ? 'var(--faint)' : small ? 'var(--faint)' : 'var(--muted)',
-                  opacity: active ? 1 : small ? 0.55 : 1,
-                  fontFamily: 'var(--sans)', transition: 'background .15s, color .15s, opacity .15s',
-                  outline: 'none',
-                }}>
-                <span style={{ fontSize: small ? 9 : 10, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>{d.label}</span>
-                <span style={{ fontSize: small ? 14 : 20, fontWeight: 700, lineHeight: 1 }}>{d.day}</span>
-                <span style={{ fontSize: 9, fontWeight: 600, opacity: .75, textTransform: 'uppercase' }}>{d.month}</span>
-                {count > 0 && (
-                  <span style={{
-                    position: 'absolute', top: 2, right: 3,
-                    minWidth: 14, height: 14, padding: '0 3px', borderRadius: 99,
-                    background: active ? '#fff' : 'var(--gold)',
-                    color: active ? 'var(--emerald)' : '#fff',
-                    fontSize: 9, fontWeight: 700, lineHeight: '14px',
-                  }}>{count}</span>
-                )}
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => openNew()}
+                className="pressable flex items-center gap-2 bg-espresso/90 text-ivory rounded-full pl-3 pr-4 py-1.5 hover:bg-espresso border-0 cursor-pointer"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="text-[13px]">Turno</span>
               </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="px" style={{ paddingBottom: 32 }}>
-        {/* Aviso al pararse en un día que no recibe reservas online. Los turnos
-            se pueden cargar a mano igual. */}
-        {!loading && !selectedOpen && (
-          <div style={{ display: 'flex', gap: 9, alignItems: 'center', margin: '10px 0 4px', padding: '9px 12px', borderRadius: 'var(--r-sm)', background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
-            <Icon name="lock" size={14} color="var(--faint)" />
-            <span style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.45 }}>
-              Este día no recibe reservas online. Podés cargar turnos a mano, o abrirlo desde{' '}
-              <button onClick={() => router.push('/panel/agenda/configuracion')}
-                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--emerald)', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 12 }}>
+              <button
+                onClick={() => router.push('/panel/agenda/configuracion')}
+                className="pressable-soft px-4 py-1.5 rounded-full bg-ivory border border-champagne/50 text-moca hover:text-espresso text-[13px] cursor-pointer"
+              >
                 Configuración
-              </button>.
-            </span>
+              </button>
+            </div>
           </div>
-        )}
 
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
-            {slots.map(s => (
-              <div key={s} style={{ display: 'flex', gap: 14, alignItems: 'center', minHeight: 52 }}>
-                <span style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 13, fontWeight: 600, color: 'var(--faint)' }}>{s}</span>
-                <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--line)', flexShrink: 0 }} />
-                <div style={{ flex: 1, height: 14, background: 'var(--surface-2)', borderRadius: 4 }} />
-              </div>
-            ))}
+          <div className="flex items-center gap-2 mt-4">
+            <button
+              onClick={() => setAnchor(toISO(addDays(new Date(anchor + 'T12:00:00'), -7)))}
+              title="Semana anterior"
+              className="pressable-soft w-8 h-8 rounded-full bg-ivory border border-champagne/50 flex items-center justify-center text-moca hover:text-espresso cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setAnchor(toISO(addDays(new Date(anchor + 'T12:00:00'), 7)))}
+              title="Semana siguiente"
+              className="pressable-soft w-8 h-8 rounded-full bg-ivory border border-champagne/50 flex items-center justify-center text-moca hover:text-espresso cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => jumpTo(e.target.value)}
+              title="Ir a una fecha"
+              className="px-3 py-1.5 rounded-full bg-ivory border border-champagne/50 text-moca text-[12.5px] cursor-pointer outline-none"
+            />
+            {!isToday && (
+              <button
+                onClick={() => jumpTo(todayISO)}
+                className="pressable-soft px-4 py-1.5 rounded-full bg-espresso/10 text-espresso text-[12.5px] hover:bg-espresso/15 border-0 cursor-pointer"
+              >
+                Hoy
+              </button>
+            )}
           </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 4 }}>
-            {slots.map(slot => {
-              const appt = appointments.find(a => a.time.slice(0, 5) === slot);
-              const isUpdating = appt && updatingId === appt.id;
-              const isDone = appt && (appt.status === 'completado' || appt.status === 'ausente' || appt.status === 'cancelado');
+
+          {/* Tira de días. Los que no reciben reservas van chicos y apagados. */}
+          <div className="flex items-end gap-1.5 mt-4 overflow-x-auto pb-1">
+            {days.map((d) => {
+              const active = d.iso === selectedDate;
+              const past = d.iso < todayISO;
+              const esHoy = d.iso === todayISO;
+              const count = apptCounts[d.iso] ?? 0;
+              const abierto = openDates.has(d.iso);
+              const chico = !abierto && count === 0;
 
               return (
-                <div key={slot} style={{ display: 'flex', gap: 14, alignItems: 'stretch', minHeight: 52 }}>
-                  {/* Hora */}
-                  <div style={{ width: 44, flexShrink: 0, textAlign: 'right', paddingTop: 15, paddingBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: appt ? 'var(--ink)' : 'var(--faint)', fontFamily: 'var(--sans)' }}>
-                      {slot}
+                <button
+                  key={d.iso}
+                  onClick={() => setSelectedDate(d.iso)}
+                  title={
+                    count > 0 ? `${count} turno${count > 1 ? 's' : ''}`
+                    : abierto ? 'Abierto para reservas'
+                    : d.weekend ? 'Fin de semana · cerrado'
+                    : 'Cerrado para reservas'
+                  }
+                  className={`pressable-soft relative shrink-0 flex flex-col items-center gap-0.5 rounded-[0.9rem] border cursor-pointer ${
+                    chico ? 'px-2 py-1.5' : 'px-3 py-2'
+                  } ${
+                    active
+                      ? 'bg-espresso border-transparent text-ivory'
+                      : esHoy
+                        ? 'bg-transparent border-espresso/40 text-espresso hover:bg-espresso/5'
+                        : past || chico
+                          ? 'bg-transparent border-transparent text-moca/50 hover:bg-espresso/5'
+                          : 'bg-transparent border-transparent text-moca hover:bg-espresso/5'
+                  }`}
+                >
+                  <span className={`uppercase tracking-wider ${chico ? 'text-[9px]' : 'text-[10px]'}`}>
+                    {d.label.replace('.', '')}
+                  </span>
+                  <span className={`leading-none tracking-tight ${chico ? 'text-[14px]' : 'text-[19px]'}`}>
+                    {d.day}
+                  </span>
+                  <span className="text-[9px] uppercase opacity-70">{d.month.replace('.', '')}</span>
+                  {count > 0 && (
+                    <span className={`absolute top-1 right-1 min-w-[15px] h-[15px] px-1 rounded-full text-[9px] flex items-center justify-center ${
+                      active ? 'bg-ivory text-espresso' : 'bg-espresso text-ivory'
+                    }`}>
+                      {count}
                     </span>
-                  </div>
-
-                  {/* Línea vertical */}
-                  <div style={{ width: 1, background: appt ? 'var(--emerald)' : 'var(--line)', flexShrink: 0, borderRadius: 1 }} />
-
-                  {/* Contenido */}
-                  <div style={{ flex: 1, padding: '6px 0' }}>
-                    {appt ? (
-                      <div style={{
-                        display: 'flex', alignItems: 'center', gap: 12,
-                        padding: '10px 14px', borderRadius: 12,
-                        background: appt.status === 'ausente' ? 'rgba(180,83,63,.05)' : 'var(--surface)',
-                        border: `1px solid ${appt.status === 'completado' ? 'rgba(154,124,58,.25)' : appt.status === 'ausente' ? 'rgba(180,83,63,.2)' : 'var(--line)'}`,
-                        boxShadow: 'var(--sh)',
-                        opacity: appt.status === 'ausente' ? 0.75 : 1,
-                      }}>
-                        <div
-                          style={{ cursor: 'pointer', flexShrink: 0 }}
-                          onClick={() => appt.patient?.id && router.push(`/panel/pacientes/${appt.patient.id}`)}
-                        >
-                          <Avatar
-                            initials={(appt.patient?.name ?? '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-                            tone="gold" size={36}
-                          />
-                        </div>
-
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div
-                            style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
-                            onClick={() => appt.patient?.id && router.push(`/panel/pacientes/${appt.patient.id}`)}
-                          >
-                            {appt.patient?.name ?? 'Paciente'}
-                          </div>
-                          <div style={{ fontSize: 11.5, color: 'var(--faint)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {appt.service?.name ?? '—'} · {appt.duration_min} min
-                          </div>
-                        </div>
-
-                        {isDone ? (
-                          <span className={`chip ${STATUS_CHIP[appt.status] ?? ''}`} style={{ fontSize: 11, padding: '4px 9px', flexShrink: 0 }}>
-                            {STATUS_LABEL[appt.status] ?? appt.status}
-                          </span>
-                        ) : (
-                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                            <button
-                              title="Vino"
-                              disabled={!!isUpdating}
-                              onClick={() => setConfirmAction({ appt, status: 'completado' })}
-                              style={{ width: 32, height: 32, borderRadius: 9, border: '1.5px solid var(--emerald)', background: 'var(--emerald-tint)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Icon name="check" size={15} color="var(--emerald)" stroke={2.2} />
-                            </button>
-                            <button
-                              title="No vino"
-                              disabled={!!isUpdating}
-                              onClick={() => setConfirmAction({ appt, status: 'ausente' })}
-                              style={{ width: 32, height: 32, borderRadius: 9, border: '1.5px solid var(--danger)', background: 'rgba(180,83,63,.06)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Icon name="x" size={15} color="var(--danger)" stroke={2.2} />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <button className="slot-free" onClick={() => openNew(slot)}>
-                        <Icon name="plus" size={13} color="currentColor" /> Disponible
-                      </button>
-                    )}
-                  </div>
-                </div>
+                  )}
+                </button>
               );
             })}
           </div>
-        )}
+        </div>
+
+        {/* Jornada */}
+        <div className="flex-1 overflow-y-auto px-5 md:px-8 pb-8">
+          {!loading && !selectedOpen && (
+            <div className="flex items-center gap-2.5 mb-3 px-3.5 py-2.5 rounded-[1rem] bg-ivory border border-champagne/50">
+              <Lock className="w-3.5 h-3.5 shrink-0 text-moca" />
+              <span className="text-[12px] text-moca leading-relaxed">
+                Este día no recibe reservas online. Podés cargar turnos a mano, o abrirlo desde{' '}
+                <button
+                  onClick={() => router.push('/panel/agenda/configuracion')}
+                  className="text-espresso underline bg-transparent border-0 p-0 cursor-pointer"
+                >
+                  Configuración
+                </button>.
+              </span>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex items-center justify-center gap-2.5 py-10 text-moca">
+              <LoaderCircle className="spinner w-4 h-4" />
+              <span className="text-[13px]">Cargando…</span>
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              {slots.map((slot) => {
+                const appt = appointments.find(a => a.time.slice(0, 5) === slot);
+                const cerrado = appt ? CERRADOS.includes(appt.status) : false;
+                const ausente = appt?.status === 'ausente';
+                const actualizando = appt && updatingId === appt.id;
+
+                return (
+                  <div key={slot} className="flex gap-3.5 items-stretch min-h-[52px]">
+                    <div className="w-11 shrink-0 text-right pt-[15px]">
+                      <span className={`text-[13px] ${appt ? 'text-espresso' : 'text-moca/50'}`}>{slot}</span>
+                    </div>
+
+                    <div className={`w-px shrink-0 rounded-full ${appt ? 'bg-espresso/40' : 'bg-champagne/60'}`} />
+
+                    <div className="flex-1 min-w-0 py-1.5">
+                      {appt ? (
+                        <motion.div
+                          layout
+                          className={`flex items-center gap-3 px-3.5 py-2.5 rounded-[1rem] border bg-ivory ${
+                            ausente ? 'border-terracota/25 opacity-75'
+                            : appt.status === 'completado' ? 'border-espresso/25'
+                            : 'border-champagne/60'
+                          }`}
+                        >
+                          <button
+                            onClick={() => appt.patient?.id && router.push(`/panel/pacientes/${appt.patient.id}`)}
+                            className="w-9 h-9 shrink-0 rounded-full bg-espresso/10 text-espresso flex items-center justify-center text-[12px] border-0 cursor-pointer"
+                          >
+                            {iniciales(appt.patient?.name ?? '?')}
+                          </button>
+
+                          <button
+                            onClick={() => appt.patient?.id && router.push(`/panel/pacientes/${appt.patient.id}`)}
+                            className="flex-1 min-w-0 text-left bg-transparent border-0 p-0 cursor-pointer"
+                          >
+                            <span className="block text-[14px] text-espresso truncate">
+                              {appt.patient?.name ?? 'Paciente'}
+                            </span>
+                            <span className="block text-[11.5px] text-moca truncate mt-0.5">
+                              {appt.service?.name ?? '—'} · {appt.duration_min} min
+                            </span>
+                          </button>
+
+                          {cerrado ? (
+                            <span className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] ${STATUS_CHIP[appt.status] ?? ''}`}>
+                              {STATUS_LABEL[appt.status] ?? appt.status}
+                            </span>
+                          ) : (
+                            <div className="flex gap-1.5 shrink-0">
+                              <button
+                                title="Vino"
+                                disabled={!!actualizando}
+                                onClick={() => setConfirmAction({ appt, status: 'completado' })}
+                                className="pressable-soft w-8 h-8 rounded-[0.7rem] border border-espresso/30 bg-espresso/5 hover:bg-espresso/10 flex items-center justify-center cursor-pointer"
+                              >
+                                <Check className="w-[15px] h-[15px] text-espresso" />
+                              </button>
+                              <button
+                                title="No vino"
+                                disabled={!!actualizando}
+                                onClick={() => setConfirmAction({ appt, status: 'ausente' })}
+                                className="pressable-soft w-8 h-8 rounded-[0.7rem] border border-terracota/30 bg-terracota/5 hover:bg-terracota/10 flex items-center justify-center cursor-pointer"
+                              >
+                                <X className="w-[15px] h-[15px] text-terracota" />
+                              </button>
+                            </div>
+                          )}
+                        </motion.div>
+                      ) : (
+                        <button
+                          onClick={() => openNew(slot)}
+                          className="pressable-soft w-full flex items-center gap-1.5 px-3.5 py-2.5 rounded-[1rem] border border-dashed border-champagne/70 bg-transparent text-moca/50 hover:text-espresso hover:border-espresso/30 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span className="text-[12px]">Disponible</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
-    </div>
 
-    {confirmAction && (
-      confirmAction.status === 'completado' ? (
-        <ConfirmDialog
-          title="Confirmar asistencia"
-          message={`¿Marcar el turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs como "Vino"?`}
-          confirmLabel="Sí, vino"
-          tone="emerald"
-          icon="check"
-          loading={updatingId === confirmAction.appt.id}
-          onConfirm={() => handleStatusChange(confirmAction.appt.id, 'completado')}
-          onClose={() => setConfirmAction(null)}
-        />
-      ) : (
-        <ConfirmDialog
-          title="Marcar como no vino"
-          message={`El turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs queda registrado como "No vino" en su historia clínica. No se borra nada.`}
-          confirmLabel="Sí, no vino"
-          tone="danger"
-          loading={updatingId === confirmAction.appt.id}
-          onConfirm={() => handleStatusChange(confirmAction.appt.id, 'ausente')}
-          onClose={() => setConfirmAction(null)}
-        />
-      )
-    )}
+      {confirmAction && (
+        confirmAction.status === 'completado' ? (
+          <ConfirmDialog
+            title="Confirmar asistencia"
+            message={`¿Marcar el turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs como "Vino"?`}
+            confirmLabel="Sí, vino"
+            tone="emerald"
+            icon="check"
+            loading={updatingId === confirmAction.appt.id}
+            onConfirm={() => handleStatusChange(confirmAction.appt.id, 'completado')}
+            onClose={() => setConfirmAction(null)}
+          />
+        ) : (
+          <ConfirmDialog
+            title="Marcar como no vino"
+            message={`El turno de ${confirmAction.appt.patient?.name ?? 'la paciente'} de las ${confirmAction.appt.time.slice(0, 5)} hs queda registrado como "No vino" en su historia clínica. No se borra nada.`}
+            confirmLabel="Sí, no vino"
+            tone="danger"
+            loading={updatingId === confirmAction.appt.id}
+            onConfirm={() => handleStatusChange(confirmAction.appt.id, 'ausente')}
+            onClose={() => setConfirmAction(null)}
+          />
+        )
+      )}
 
-    {showNew && (
-      <NewAppointmentModal
-        date={selectedDate}
-        defaultSlot={newDefaultSlot}
-        onSave={newAppt => {
-          setAppointments(prev => [...prev, newAppt].sort((a, b) => a.time.localeCompare(b.time)));
-          setShowNew(false);
-        }}
-        onClose={() => setShowNew(false)}
-      />
-    )}
+      {showNew && (
+        <NewAppointmentModal
+          date={selectedDate}
+          defaultSlot={newDefaultSlot}
+          onSave={newAppt => {
+            setAppointments(prev => [...prev, newAppt].sort((a, b) => a.time.localeCompare(b.time)));
+            setShowNew(false);
+          }}
+          onClose={() => setShowNew(false)}
+        />
+      )}
     </>
   );
 }

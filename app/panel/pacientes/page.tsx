@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { AlertTriangle, ChevronRight, LoaderCircle, Plus, Search } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/Avatar';
 import { PatientModal, type PatientData } from '@/components/panel/PatientModal';
 import { BLOCKING_STATUSES } from '@/lib/types';
 
@@ -20,6 +19,10 @@ function sinceLabel(iso: string): string {
   if (months < 12) return `hace ${months} ${months === 1 ? 'mes' : 'meses'}`;
   const years = Math.floor(months / 12);
   return `hace ${years} año${years === 1 ? '' : 's'}`;
+}
+
+function iniciales(name: string) {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
 export default function PacientesPage() {
@@ -69,94 +72,111 @@ export default function PacientesPage() {
 
   return (
     <>
-    <div className="page scr-anim">
-      <div className="scrhead">
-        <div className="scrhead__row">
-          <div>
-            <h1 className="scrhead__title">Pacientes</h1>
-            <p className="scrhead__sub">{loading ? '…' : `${patients.length} registrados`}</p>
+      <div className="h-full flex flex-col">
+        <div className="px-5 md:px-8 pt-4 md:pt-8 pb-3 shrink-0 flex flex-col gap-3">
+          <div className="flex items-baseline justify-between gap-4">
+            <h1 className="text-2xl md:text-4xl text-espresso tracking-tight leading-tight">
+              Pacientes
+            </h1>
+            <button
+              onClick={() => setShowNew(true)}
+              className="pressable flex items-center gap-2 bg-espresso/90 text-ivory rounded-full pl-3 pr-4 py-1.5 hover:bg-espresso border-0 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-[13px]">Nueva</span>
+            </button>
           </div>
-          <button className="btn btn--gold btn--sm" onClick={() => setShowNew(true)}>
-            <Icon name="plus" size={15} color="#fff" /> Nuevo
-          </button>
-        </div>
-        <div style={{ marginTop: 12, position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', display: 'flex' }}>
-            <Icon name="search" size={16} color="var(--faint)" />
-          </span>
-          <input
-            className="input"
-            placeholder="Buscar por nombre, email o teléfono…"
-            value={q}
-            onChange={e => setQ(e.target.value)}
-            style={{ paddingLeft: 38 }}
-          />
-        </div>
-      </div>
 
-      <div className="px" style={{ paddingBottom: 24 }}>
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--faint)', fontSize: 13 }}>Cargando…</div>
-        )}
-        {error && (
-          <div style={{ padding: '14px 16px', borderRadius: 'var(--r)', background: 'rgba(180,83,63,.08)', color: 'var(--danger)', fontSize: 13 }}>
-            Error al cargar: {error}
+          <div className="relative max-w-[480px]">
+            <Search className="w-4 h-4 text-moca absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Buscar por nombre, email o teléfono…"
+              className="w-full pl-11 pr-4 py-2.5 rounded-full bg-ivory border border-champagne/50 text-[14px] text-espresso placeholder:text-moca outline-none focus:border-espresso/30"
+            />
           </div>
-        )}
-        {!loading && !error && filtered.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--faint)' }}>
-            <Icon name="users" size={40} color="var(--faint)" />
-            <p style={{ marginTop: 12, fontSize: 14 }}>{q ? 'Sin resultados' : 'No hay pacientes aún'}</p>
-          </div>
-        )}
-        {!loading && !error && filtered.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 1, background: 'var(--line)', borderRadius: 'var(--r-lg)', overflow: 'hidden', border: '1px solid var(--line)' }}>
-            {filtered.map(p => (
-              <div key={p.id} onClick={() => router.push(`/panel/pacientes/${p.id}`)} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'var(--surface)', cursor: 'pointer' }}>
-                <Avatar
-                  initials={p.name.split(' ').map((w: string) => w[0]).join('').slice(0, 2)}
-                  tone="gold"
-                  size={42}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--ink)' }}>{p.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--faint)', marginTop: 2 }}>
-                    {[p.age ? `${p.age} años` : null, p.skin_type].filter(Boolean).join(' · ')}
-                  </div>
-                  <div style={{ fontSize: 11.5, marginTop: 3, color: lastVisits[p.id] ? 'var(--muted)' : 'var(--faint)' }}>
-                    {lastVisits[p.id]
-                      ? <>Última visita <strong style={{ color: 'var(--emerald)' }}>{sinceLabel(lastVisits[p.id])}</strong></>
-                      : 'Todavía no vino'}
-                  </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 md:px-8 pb-8">
+          {error && (
+            <div className="rounded-[1.25rem] bg-terracota/10 border border-terracota/25 p-4 text-[13px] text-terracota">
+              No pudimos leer los pacientes: {error}
+            </div>
+          )}
+
+          {loading && (
+            <div className="flex items-center justify-center gap-2.5 py-10 text-moca">
+              <LoaderCircle className="spinner w-4 h-4" />
+              <span className="text-[13px]">Cargando…</span>
+            </div>
+          )}
+
+          {!loading && !error && filtered.length === 0 && (
+            <div className="rounded-[1.25rem] bg-ivory border border-champagne/50 py-10 text-center text-[13px] text-moca">
+              {q ? `Nadie coincide con «${q}»` : 'Todavía no hay pacientes cargados'}
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2">
+            {filtered.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => router.push(`/panel/pacientes/${p.id}`)}
+                className="pressable-soft w-full text-left p-3.5 md:p-4 rounded-[1.25rem] bg-ivory border border-champagne/50 hover:border-espresso/20 flex items-center gap-3.5 cursor-pointer"
+              >
+                <span className="w-11 h-11 shrink-0 rounded-full bg-espresso/10 text-espresso flex items-center justify-center text-[14px]">
+                  {iniciales(p.name)}
+                </span>
+
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[15px] text-espresso truncate">{p.name}</span>
+                  <span className="block text-[12px] text-moca truncate mt-0.5">
+                    {[
+                      p.age ? `${p.age} años` : null,
+                      p.skin_type,
+                      lastVisits[p.id] ? `última visita ${sinceLabel(lastVisits[p.id])}` : null,
+                    ].filter(Boolean).join(' · ')}
+                  </span>
+
                   {((p.tags?.length ?? 0) > 0 || (p.alerts?.length ?? 0) > 0) && (
-                    <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                      {p.tags?.map(tag => (
-                        <span key={tag} className="chip chip--gold" style={{ fontSize: 11, padding: '3px 8px' }}>{tag}</span>
+                    <span className="flex flex-wrap items-center gap-1.5 mt-2">
+                      {p.tags?.map((t) => (
+                        <span key={t} className="px-2.5 py-0.5 rounded-full bg-espresso/8 text-espresso text-[11px]">
+                          {t}
+                        </span>
                       ))}
-                      {p.alerts?.map(a => (
-                        <span key={a} className="chip chip--danger" style={{ fontSize: 11, padding: '3px 8px' }}>⚠ {a}</span>
+                      {p.alerts?.map((a) => (
+                        <span
+                          key={a}
+                          className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-terracota/10 text-terracota text-[11px]"
+                        >
+                          <AlertTriangle className="w-3 h-3" />
+                          {a}
+                        </span>
                       ))}
-                    </div>
+                    </span>
                   )}
-                </div>
-                <Icon name="chevR" size={16} color="var(--faint)" />
-              </div>
+                </span>
+
+                <ChevronRight className="w-5 h-5 shrink-0 text-taupe" />
+              </button>
             ))}
           </div>
-        )}
+        </div>
       </div>
-    </div>
 
-    {showNew && (
-      <PatientModal
-        onSave={newPatient => {
-          setPatients(prev => [...prev, newPatient].sort((a, b) => a.name.localeCompare(b.name)));
-          setShowNew(false);
-          router.push(`/panel/pacientes/${newPatient.id}`);
-        }}
-        onClose={() => setShowNew(false)}
-      />
-    )}
+      {showNew && (
+        <PatientModal
+          onSave={newPatient => {
+            setPatients(prev => [...prev, newPatient].sort((a, b) => a.name.localeCompare(b.name)));
+            setShowNew(false);
+            router.push(`/panel/pacientes/${newPatient.id}`);
+          }}
+          onClose={() => setShowNew(false)}
+        />
+      )}
     </>
   );
 }

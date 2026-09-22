@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
+import { AlertTriangle, ArrowUpRight, CalendarDays, CircleCheck, LoaderCircle, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { Icon } from '@/components/ui/Icon';
-import { Avatar } from '@/components/ui/Avatar';
 
 type AppointmentRow = {
   id: string;
@@ -31,15 +32,23 @@ type InventoryRow = {
   unit: string;
 };
 
-const STATUS_STYLE: Record<string, { label: string; cls: string }> = {
-  confirmado: { label: 'Confirmado', cls: 'chip--emerald' },
-  'en-sala': { label: 'En sala', cls: 'chip--gold' },
-  pendiente: { label: 'Pendiente', cls: 'chip--silver' },
-  completado: { label: 'Completado', cls: 'chip--emerald' },
-  cancelado: { label: 'Cancelado', cls: 'chip--danger' },
+const STATUS_LABEL: Record<string, string> = {
+  confirmado: 'Confirmado',
+  'en-sala': 'En sala',
+  pendiente: 'Pendiente',
+  completado: 'Completado',
+  cancelado: 'Cancelado',
+  ausente: 'No vino',
 };
 
-const TONES: Array<'emerald' | 'gold' | 'silver'> = ['gold', 'silver', 'gold', 'silver', 'gold'];
+const STATUS_CHIP: Record<string, string> = {
+  confirmado: 'bg-espresso/10 text-espresso',
+  'en-sala': 'bg-champagne/40 text-moca',
+  pendiente: 'bg-champagne/40 text-moca',
+  completado: 'bg-espresso/10 text-espresso',
+  cancelado: 'bg-terracota/10 text-terracota',
+  ausente: 'bg-terracota/10 text-terracota',
+};
 
 function dateLabel(iso: string, today: string, tomorrow: string) {
   if (iso === today) return 'Hoy';
@@ -54,7 +63,12 @@ function toLocalISO(d: Date) {
   return `${y}-${m}-${day}`;
 }
 
+function iniciales(name: string) {
+  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
 export default function Dashboard() {
+  const router = useRouter();
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [upcoming, setUpcoming] = useState<UpcomingRow[]>([]);
   const [lowStock, setLowStock] = useState<InventoryRow[]>([]);
@@ -95,124 +109,144 @@ export default function Dashboard() {
     });
   }, [today]);
 
+  // Los mismos cuatro números que antes, en el mismo orden.
   const kpis = [
-    { label: 'Turnos hoy', value: appointments.length, icon: 'calendar', color: 'var(--emerald)' },
-    { label: 'En sala ahora', value: appointments.filter(a => a.status === 'en-sala').length, icon: 'users', color: 'var(--gold)' },
-    { label: 'Confirmados', value: appointments.filter(a => a.status === 'confirmado').length, icon: 'checkCircle', color: 'var(--emerald)' },
-    { label: 'Stock bajo', value: lowStock.length, icon: 'alert', color: lowStock.length > 0 ? 'var(--warn)' : 'var(--faint)' },
+    { label: 'Turnos hoy', value: appointments.length, Icon: CalendarDays, alerta: false },
+    { label: 'En sala ahora', value: appointments.filter(a => a.status === 'en-sala').length, Icon: Users, alerta: false },
+    { label: 'Confirmados', value: appointments.filter(a => a.status === 'confirmado').length, Icon: CircleCheck, alerta: false },
+    { label: 'Stock bajo', value: lowStock.length, Icon: AlertTriangle, alerta: lowStock.length > 0 },
   ];
 
+  const saludo = (() => {
+    const h = new Date().getHours();
+    return h < 13 ? 'Buenos días' : h < 20 ? 'Buenas tardes' : 'Buenas noches';
+  })();
+
   return (
-    <div className="page scr-anim" style={{ paddingBottom: 24 }}>
-      <header className="scrhead">
-        <div className="scrhead__row">
-          <div>
-            <div className="scrhead__title">Buenos días</div>
-            <div className="scrhead__sub" style={{ textTransform: 'capitalize' }}>
-              Hoy · {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="h-full overflow-y-auto px-5 md:px-8 pt-4 md:pt-8 pb-8">
+      <div className="flex flex-col gap-1 mb-5">
+        <h1 className="text-2xl md:text-4xl text-espresso tracking-tight leading-tight">{saludo}</h1>
+        <span className="text-[12px] md:text-[13px] text-moca first-letter:uppercase">
+          Hoy · {new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+        </span>
+      </div>
 
-      <div className="px">
-        {/* KPIs */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-          {kpis.map((k, i) => (
-            <div key={i} className="card" style={{ padding: '14px 16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <span style={{ fontSize: 11.5, color: 'var(--faint)', fontWeight: 600 }}>{k.label}</span>
-                <Icon name={k.icon} size={16} color={k.color} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 md:gap-3 mb-6">
+        {kpis.map(({ label, value, Icon, alerta }, i) => (
+          <motion.div
+            key={label}
+            initial={{ opacity: 0, transform: 'translateY(8px)' }}
+            animate={{ opacity: 1, transform: 'translateY(0px)' }}
+            transition={{ duration: 0.3, delay: i * 0.05, ease: [0.23, 1, 0.32, 1] }}
+            className="p-3.5 md:p-4 rounded-[1.25rem] bg-ivory border border-champagne/50 flex flex-col gap-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] md:text-[12px] text-moca">{label}</span>
+              <Icon className={`w-4 h-4 shrink-0 ${alerta ? 'text-terracota' : 'text-moca'}`} />
+            </div>
+            <span className="text-[28px] md:text-[32px] text-espresso tracking-tight leading-none">
+              {loading ? '—' : value}
+            </span>
+          </motion.div>
+        ))}
+      </div>
+
+      <Seccion titulo="Próximos turnos" accion="Ver agenda" onAccion={() => router.push('/panel/agenda')}>
+        {loading ? (
+          <Cargando />
+        ) : upcoming.length === 0 ? (
+          <Vacio texto="No hay turnos próximos agendados" />
+        ) : (
+          <div className="rounded-[1.25rem] bg-ivory border border-champagne/50 px-4">
+            {upcoming.map((a, i) => (
+              <div
+                key={a.id}
+                className={`flex items-center gap-3 py-3 ${i < upcoming.length - 1 ? 'border-b border-champagne/40' : ''}`}
+              >
+                <span className="w-9 h-9 shrink-0 rounded-full bg-espresso/10 text-espresso flex items-center justify-center text-[12px]">
+                  {iniciales(a.patient?.name ?? '?')}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] text-espresso truncate">
+                    {a.patient?.name ?? 'Paciente'}
+                  </span>
+                  <span className="block text-[11.5px] text-moca truncate mt-0.5">
+                    {a.service?.name ?? '—'} · {dateLabel(a.date, today, tomorrow)} {a.time.slice(0, 5)}
+                  </span>
+                </span>
+                <span className={`shrink-0 px-2.5 py-1 rounded-full text-[11px] ${STATUS_CHIP[a.status] ?? STATUS_CHIP.pendiente}`}>
+                  {STATUS_LABEL[a.status] ?? a.status}
+                </span>
               </div>
-              <div style={{ fontFamily: 'var(--serif)', fontSize: 32, fontWeight: 600, color: loading ? 'var(--faint)' : 'var(--ink)', lineHeight: 1 }}>
-                {loading ? '—' : k.value}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Próximos turnos (de cualquier día) */}
-        <div style={{ marginBottom: 20 }}>
-          <div className="between" style={{ marginBottom: 12 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)' }}>Próximos turnos</div>
-            <a href="/panel/agenda" style={{ fontSize: 13, color: 'var(--emerald)', fontWeight: 600, textDecoration: 'none' }}>Ver agenda</a>
-          </div>
-          {!loading && upcoming.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--faint)', fontSize: 13, background: 'var(--surface)', borderRadius: 'var(--r-lg)', border: '1px solid var(--line)' }}>
-              No hay turnos próximos agendados
-            </div>
-          ) : (
-            <div className="card" style={{ padding: '2px 14px' }}>
-              {(loading ? Array(3).fill(null) : upcoming).map((appt, i) => (
-                <div key={appt?.id ?? i} style={{ display: 'flex', alignItems: 'center', gap: 13, padding: '13px 0', borderBottom: i < (loading ? 2 : upcoming.length - 1) ? '1px solid var(--line)' : 'none' }}>
-                  {loading ? (
-                    <>
-                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--surface-2)', flexShrink: 0 }} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ height: 13, width: '60%', background: 'var(--surface-2)', borderRadius: 4, marginBottom: 6 }} />
-                        <div style={{ height: 11, width: '35%', background: 'var(--surface-2)', borderRadius: 4 }} />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      {/* fecha */}
-                      <div style={{
-                        width: 56, flexShrink: 0, textAlign: 'center', padding: '6px 2px', borderRadius: 10,
-                        background: appt.date === today ? 'var(--emerald-tint)' : 'var(--surface-2)',
-                      }}>
-                        <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.03em', textTransform: 'uppercase', color: appt.date === today ? 'var(--emerald)' : 'var(--muted)', lineHeight: 1.3 }}>
-                          {dateLabel(appt.date, today, tomorrow)}
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: appt.date === today ? 'var(--emerald)' : 'var(--ink)', marginTop: 1 }}>
-                          {appt.time.slice(0, 5)}
-                        </div>
-                      </div>
-                      <Avatar
-                        initials={(appt.patient?.name ?? '?').split(' ').map((w: string) => w[0]).slice(0, 2).join('')}
-                        tone={TONES[i % TONES.length]}
-                        size={40}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{appt.patient?.name ?? 'Paciente'}</div>
-                        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {appt.service?.name ?? 'Consulta'} · {appt.duration_min} min
-                        </div>
-                      </div>
-                      <span className={`chip chip--dot ${(STATUS_STYLE[appt.status] ?? STATUS_STYLE.pendiente).cls}`} style={{ padding: '4px 10px', fontSize: 11, flexShrink: 0 }}>
-                        {(STATUS_STYLE[appt.status] ?? STATUS_STYLE.pendiente).label}
-                      </span>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Stock bajo */}
-        {!loading && lowStock.length > 0 && (
-          <div>
-            <div className="between" style={{ marginBottom: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ink)' }}>Insumos con stock bajo</div>
-              <a href="/panel/insumos" style={{ fontSize: 13, color: 'var(--emerald)', fontWeight: 600, textDecoration: 'none' }}>Ver todo</a>
-            </div>
-            <div className="card" style={{ padding: '2px 14px' }}>
-              {lowStock.map((item, i) => (
-                <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0', borderBottom: i < lowStock.length - 1 ? '1px solid var(--line)' : 'none' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(180,83,63,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Icon name="alert" size={16} color="var(--danger)" />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--ink)' }}>{item.name}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{item.stock} {item.unit} · mín. {item.min_stock}</div>
-                  </div>
-                  <span className="chip chip--danger" style={{ fontSize: 11, padding: '4px 10px' }}>Stock bajo</span>
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         )}
+      </Seccion>
+
+      {!loading && lowStock.length > 0 && (
+        <Seccion titulo="Stock bajo" accion="Ver todo" onAccion={() => router.push('/panel/insumos')}>
+          <div className="rounded-[1.25rem] bg-ivory border border-champagne/50 px-4">
+            {lowStock.map((item, i) => (
+              <div
+                key={item.id}
+                className={`flex items-center gap-3 py-3 ${i < lowStock.length - 1 ? 'border-b border-champagne/40' : ''}`}
+              >
+                <span className="w-9 h-9 shrink-0 rounded-full bg-terracota/10 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 text-terracota" />
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[14px] text-espresso truncate">{item.name}</span>
+                  <span className="block text-[11.5px] text-moca mt-0.5">
+                    Quedan {item.stock} {item.unit} · mínimo {item.min_stock}
+                  </span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </Seccion>
+      )}
+    </div>
+  );
+}
+
+function Seccion({
+  titulo, accion, onAccion, children,
+}: {
+  titulo: string;
+  accion: string;
+  onAccion: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-2.5 mb-6">
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-[14px] md:text-[15px] text-espresso">{titulo}</span>
+        <button
+          onClick={onAccion}
+          className="pressable-soft flex items-center gap-1 text-[12px] md:text-[13px] text-moca hover:text-espresso bg-transparent border-0 cursor-pointer"
+        >
+          {accion}
+          <ArrowUpRight className="w-3.5 h-3.5" />
+        </button>
       </div>
+      {children}
+    </div>
+  );
+}
+
+function Vacio({ texto }: { texto: string }) {
+  return (
+    <div className="rounded-[1.25rem] bg-ivory border border-champagne/50 py-8 text-center text-[13px] text-moca">
+      {texto}
+    </div>
+  );
+}
+
+function Cargando() {
+  return (
+    <div className="rounded-[1.25rem] bg-ivory border border-champagne/50 py-8 flex items-center justify-center gap-2.5 text-moca">
+      <LoaderCircle className="spinner w-4 h-4" />
+      <span className="text-[13px]">Cargando…</span>
     </div>
   );
 }

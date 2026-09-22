@@ -1,29 +1,38 @@
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Marcellus&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Hanken+Grotesk:wght@400;500;600;700&display=swap');
-
+@import 'tailwindcss';
+@theme {
+  --color-ivory: #e7e3d8;
+  --color-champagne: #ccbcad;
+  --color-taupe: #a89883;
+  --color-moca: #715a48;
+  --color-espresso: #2c2016;
+  --color-porcelain: #f2efe8;
+  --color-terracota: #b4533f;
+}
 :root {
-  --bg: #ffffff;
-  --bg-tint: #faf9f6;
-  --surface: #ffffff;
-  --surface-2: #f5f4ef;
-  --surface-3: #efeee7;
-  --emerald: #9a7c3a;
-  --emerald-700: #7a5c20;
-  --emerald-600: #8a6c2a;
-  --emerald-500: #b9974f;
-  --emerald-tint: #f5ede0;
-  --emerald-tint-2: #ede0c8;
-  --gold: #b9974f;
-  --gold-deep: #9a7c3a;
-  --gold-soft: #d8c79b;
-  --gold-tint: #f5efe0;
-  --silver: #b6bac0;
-  --silver-tint: #eceef0;
-  --ink: #1c1810;
-  --text: #2e2a20;
-  --muted: #7a6e5e;
-  --faint: #a89e90;
-  --line: #ece8df;
-  --line-strong: #ddd7c8;
+  --bg: #f2efe8;
+  --bg-tint: #eeeae1;
+  --surface: #e7e3d8;
+  --surface-2: #dfdacd;
+  --surface-3: #d7d1c2;
+  --emerald: #2c2016;
+  --emerald-700: #1d150e;
+  --emerald-600: #241a11;
+  --emerald-500: #4a382a;
+  --emerald-tint: #e3dcd2;
+  --emerald-tint-2: #d5cabb;
+  --gold: #2c2016;
+  --gold-deep: #1d150e;
+  --gold-soft: #ccbcad;
+  --gold-tint: #e7e3d8;
+  --silver: #a89883;
+  --silver-tint: #ddd3c7;
+  --ink: #2c2016;
+  --text: #2c2016;
+  --muted: #715a48;
+  --faint: #a89883;
+  --line: #ddd3c7;
+  --line-strong: #ccbcad;
   --wa: #25885f;
   --wa-bright: #2aa86f;
   --danger: #b4533f;
@@ -34,7 +43,7 @@
   --sh-sm: 0 1px 2px rgba(28,24,16,.05), 0 1px 1px rgba(28,24,16,.04);
   --sh: 0 2px 8px rgba(28,24,16,.06), 0 8px 24px rgba(28,24,16,.05);
   --sh-lg: 0 8px 24px rgba(28,24,16,.10), 0 24px 48px rgba(28,24,16,.10);
-  --sh-gold: 0 4px 16px rgba(154,124,58,.18);
+  --sh-gold: 0 4px 16px rgba(44,32,22,.14);
   --safe-top: max(env(safe-area-inset-top), 16px);
   --safe-bottom: max(env(safe-area-inset-bottom), 10px);
   --tabbar-h: 64px;
@@ -49,8 +58,8 @@ body { font-family: var(--sans); color: var(--text); background: var(--bg-tint);
 .eyebrow { font-size: 11px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; color: var(--gold-deep); }
 .eyebrow--light { color: var(--gold-soft); }
 
-.marble { background-color: #f7f6f1; background-image: url('/marble.svg'); background-size: cover; background-position: 50% 30%; }
-.marble--dark { background-color: #1c1810; background-image: url('/marble-dark.svg'); background-size: cover; background-position: 50% 40%; }
+.marble { background-color: var(--bg-tint); background-image: url('/marble.svg'); background-size: cover; background-position: 50% 30%; }
+.marble--dark { background-color: var(--ink); background-image: url('/marble-dark.svg'); background-size: cover; background-position: 50% 40%; }
 
 /* Buttons */
 .btn { font-family: var(--sans); font-weight: 600; font-size: 15px; border: none; border-radius: 999px; padding: 14px 22px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer; transition: transform .15s ease, box-shadow .2s ease, background .2s ease; line-height: 1; text-decoration: none; }
@@ -81,7 +90,7 @@ body { font-family: var(--sans); color: var(--text); background: var(--bg-tint);
 .chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 5px 11px; border-radius: 999px; background: var(--surface-2); color: var(--muted); white-space: nowrap; }
 .chip--emerald { background: var(--emerald-tint); color: var(--emerald); }
 .chip--gold { background: var(--gold-tint); color: var(--gold-deep); }
-.chip--silver { background: var(--silver-tint); color: #5c6168; }
+.chip--silver { background: var(--silver-tint); color: var(--muted); }
 .chip--wa { background: rgba(37,136,95,.12); color: var(--wa); }
 .chip--danger { background: rgba(180,83,63,.1); color: var(--danger); }
 .chip--dot::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
@@ -90,7 +99,7 @@ body { font-family: var(--sans); color: var(--text); background: var(--bg-tint);
 .field { display: flex; flex-direction: column; gap: 7px; }
 .field__label { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
 .input { font-family: var(--sans); font-size: 15px; color: var(--ink); padding: 13px 15px; border-radius: var(--r-sm); border: 1px solid var(--line-strong); background: var(--surface); width: 100%; transition: border .15s ease, box-shadow .15s ease; }
-.input:focus { outline: none; border-color: var(--emerald-500); box-shadow: 0 0 0 3px rgba(185,151,79,.15); }
+.input:focus { outline: none; border-color: var(--emerald-500); box-shadow: 0 0 0 3px rgba(44,32,22,.12); }
 .input::placeholder { color: var(--faint); }
 textarea.input { resize: none; line-height: 1.5; }
 
@@ -111,20 +120,20 @@ textarea.input { resize: none; line-height: 1.5; }
 .faint { color: var(--faint); }
 
 /* Screen header */
-.scrhead { position: sticky; top: 0; z-index: 20; padding: var(--safe-top) 20px 14px; background: linear-gradient(var(--bg-tint) 78%, rgba(250,249,246,0)); }
+.scrhead { position: sticky; top: 0; z-index: 20; padding: var(--safe-top) 20px 14px; background: linear-gradient(var(--bg-tint) 78%, rgba(238,234,225,0)); }
 .scrhead__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .scrhead__title { font-family: var(--serif); font-weight: 600; font-size: 30px; line-height: 1; color: var(--ink); letter-spacing: -.01em; }
 .scrhead__sub { font-size: 13px; color: var(--muted); margin-top: 5px; }
 
 /* Tab bar */
-.tabbar { position: relative; flex-shrink: 0; display: flex; align-items: flex-start; justify-content: space-around; height: calc(var(--tabbar-h) + var(--safe-bottom)); padding: 8px 6px var(--safe-bottom); background: rgba(255,255,255,.82); backdrop-filter: blur(20px) saturate(180%); border-top: 1px solid var(--line); z-index: 30; }
+.tabbar { position: relative; flex-shrink: 0; display: flex; align-items: flex-start; justify-content: space-around; height: calc(var(--tabbar-h) + var(--safe-bottom)); padding: 8px 6px var(--safe-bottom); background: rgba(242,239,232,.85); backdrop-filter: blur(20px) saturate(180%); border-top: 1px solid var(--line); z-index: 30; }
 .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border: none; background: none; cursor: pointer; color: var(--faint); transition: color .15s ease; }
 .tab svg { width: 24px; height: 24px; }
 .tab__label { font-size: 10px; font-weight: 600; letter-spacing: 0; white-space: nowrap; }
 .tab--active { color: var(--emerald); }
 .tab--wa.tab--active { color: var(--wa); }
 .tab__wrap { position: relative; display: flex; }
-.tab__badge { position: absolute; top: -4px; right: -8px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--gold); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 1.5px solid #fff; }
+.tab__badge { position: absolute; top: -4px; right: -8px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--gold); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; border: 1.5px solid var(--bg); }
 
 @keyframes scrIn { from { transform: translateY(10px); } to { transform: none; } }
 .scr-anim { animation: scrIn .34s cubic-bezier(.22,.61,.36,1); }
@@ -210,7 +219,7 @@ textarea.input { resize: none; line-height: 1.5; }
 /* El hero llena el alto de la pantalla (sin franja blanca vacía abajo en móvil) */
 .lscroll { display: flex; flex-direction: column; min-height: 100dvh; }
 .lscroll .lhero--tall { flex: 1; display: flex; flex-direction: column; justify-content: center; }
-.ltopbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; background: rgba(250,249,246,.72); backdrop-filter: blur(16px) saturate(160%); transition: background .3s; }
+.ltopbar { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; background: rgba(238,234,225,.72); backdrop-filter: blur(16px) saturate(160%); transition: background .3s; }
 .ltopbar--onmarble { background: transparent; }
 .ltopbar--dark .lbrand__name, .ltopbar--onmarble.ltopbar--dark .lbrand__name { color: #fff; }
 .lbrand { display: flex; align-items: center; gap: 9px; }
@@ -332,4 +341,59 @@ textarea.input { resize: none; line-height: 1.5; }
   .cols-agenda\@d { grid-template-columns: 1fr 360px; align-items: start; gap: 24px; }
   .pf-grid { display: grid; grid-template-columns: 340px 1fr; gap: 28px; align-items: start; }
   .pf-aside { position: sticky; top: 16px; }
+}
+
+
+/* ── Piezas del rediseño ──────────────────────────────────────── */
+
+/* Feedback de presión. scale() arrastra texto e iconos con él, que es lo que
+   lo hace leer como una tecla y no como un color que cambia. */
+.pressable {
+  transition:
+    transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
+    background-color 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.pressable:active { transform: scale(0.97); }
+
+/* El CTA de la esquina entra con demora pero se va rápido: si tarda en irse,
+   queda asomando debajo de lo que se abre encima. */
+.cta-corner {
+  transition:
+    opacity 500ms cubic-bezier(0.23, 1, 0.32, 1) 300ms,
+    translate 500ms cubic-bezier(0.23, 1, 0.32, 1) 300ms,
+    scale 160ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+.cta-corner:active { scale: 0.97; }
+.cta-corner[data-state='oculto'] {
+  opacity: 0;
+  translate: 0 8px;
+  pointer-events: none;
+  transition: opacity 150ms ease-out, translate 150ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pressable:active { transform: none; }
+  .cta-corner, .cta-corner[data-state='oculto'] {
+    transition: opacity 200ms ease-out;
+    translate: none;
+  }
+  .cta-corner:active { scale: 1; }
+}
+
+/* Spinner de espera. CSS y no JS: sigue girando parejo aunque el hilo
+   principal esté ocupado con la request, que es cuando se lo mira. */
+.spinner { animation: girar 700ms linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+
+/* El tilde de la confirmación se dibuja solo. */
+.check-draw {
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: trazar 420ms cubic-bezier(0.23, 1, 0.32, 1) 140ms forwards;
+}
+@keyframes trazar { to { stroke-dashoffset: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation-duration: 1400ms; }
+  .check-draw { animation: none; stroke-dashoffset: 0; }
 }

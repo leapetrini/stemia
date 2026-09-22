@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { motion } from 'motion/react';
+import { Clock, Eye, EyeOff, LoaderCircle, Pencil, Plus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getMyProfessional } from '@/lib/professional';
-import { Icon } from '@/components/ui/Icon';
-import { ExpandableText } from '@/components/ui/RichText';
 import { ServiceModal } from '@/components/panel/ServiceModal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Service } from '@/lib/types';
@@ -102,130 +102,141 @@ export default function ServiciosPage() {
 
   return (
     <>
-      <div className="page scr-anim">
-        <div className="scrhead">
-          <div className="scrhead__row">
-            <div>
-              <h1 className="scrhead__title">Servicios</h1>
-              <p className="scrhead__sub">
+      <div className="h-full flex flex-col">
+        <div className="px-5 md:px-8 pt-4 md:pt-8 pb-3 shrink-0 flex flex-col gap-3">
+          <div className="flex items-end justify-between gap-4">
+            <div className="flex flex-col gap-0.5">
+              <h1 className="text-2xl md:text-4xl text-espresso tracking-tight leading-tight">
+                Servicios
+              </h1>
+              <span className="text-[12px] md:text-[13px] text-moca">
                 {loading
                   ? '…'
                   : `${activeCount} activo${activeCount === 1 ? '' : 's'}${withDeposit > 0 ? ` · ${withDeposit} con seña` : ''}`}
-              </p>
+              </span>
             </div>
-            <button className="btn btn--gold btn--sm" disabled={!professionalId}
-              onClick={() => setModal({ service: null })}>
-              <Icon name="plus" size={15} color="#fff" /> Agregar
+
+            <button
+              disabled={!professionalId}
+              onClick={() => setModal({ service: null })}
+              className="pressable flex items-center gap-2 bg-espresso/90 text-ivory rounded-full pl-3 pr-4 py-1.5 hover:bg-espresso border-0 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span className="text-[13px]">Nuevo</span>
             </button>
           </div>
 
-          <div style={{ display: 'flex', gap: 4, marginTop: 14 }}>
-            <button style={pillActive}>Mis servicios</button>
-            <button style={pillIdle} onClick={() => router.push('/panel/pagos')}>Cobros</button>
+          {/* Servicios y Cobros son la misma sección, con pestañas adentro. */}
+          <div className="flex gap-2">
+            <span className="px-4 py-1.5 rounded-full bg-espresso text-ivory text-[13px]">
+              Servicios
+            </span>
+            <button
+              onClick={() => router.push('/panel/pagos')}
+              className="pressable-soft px-4 py-1.5 rounded-full bg-ivory border border-champagne/50 text-moca hover:text-espresso text-[13px] cursor-pointer"
+            >
+              Cobros
+            </button>
           </div>
         </div>
 
-        <div className="px" style={{ paddingBottom: 32 }}>
-          {loading && (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--faint)', fontSize: 13 }}>Cargando…</div>
-          )}
-
+        <div className="flex-1 overflow-y-auto px-5 md:px-8 pb-8">
           {error && (
-            <div style={{ padding: '12px 14px', marginBottom: 14, borderRadius: 'var(--r)', background: 'rgba(180,83,63,.08)', color: 'var(--danger)', fontSize: 13 }}>
+            <div className="rounded-[1.25rem] bg-terracota/10 border border-terracota/25 p-4 text-[13px] text-terracota mb-3">
               {error}
             </div>
           )}
 
-          {!loading && services.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--faint)' }}>
-              <Icon name="tag" size={40} color="var(--faint)" />
-              <p style={{ marginTop: 12, fontSize: 14 }}>Todavía no cargaste servicios</p>
-              <button className="btn btn--gold btn--sm" style={{ marginTop: 14 }}
-                disabled={!professionalId} onClick={() => setModal({ service: null })}>
-                <Icon name="plus" size={15} color="#fff" /> Agregar el primero
-              </button>
+          {loading && (
+            <div className="flex items-center justify-center gap-2.5 py-10 text-moca">
+              <LoaderCircle className="spinner w-4 h-4" />
+              <span className="text-[13px]">Cargando…</span>
             </div>
           )}
 
-          {!loading && grouped.map(([cat, items]) => (
-            <div key={cat} style={{ marginBottom: 22 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--faint)', marginBottom: 9 }}>
-                {cat}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {items.map(s => {
-                  const free = (s.price ?? 0) === 0;
-                  const deposit = s.deposit_amount ?? 0;
-                  return (
-                    <div key={s.id} className="card" style={{ padding: '14px 16px', opacity: s.active ? 1 : 0.62 }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 600, fontSize: 14.5, color: 'var(--ink)' }}>{s.name}</span>
-                            {!s.active && (
-                              <span className="chip chip--silver" style={{ fontSize: 10.5, padding: '2px 8px' }}>Oculto</span>
-                            )}
-                          </div>
+          {!loading && services.length === 0 && !error && (
+            <div className="rounded-[1.25rem] bg-ivory border border-champagne/50 py-10 text-center text-[13px] text-moca">
+              Todavía no cargaste ningún servicio
+            </div>
+          )}
 
-                          {/* Se muestra igual que en la reserva, así ve cómo le queda */}
-                          {s.description && (
-                            <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.55 }}>
-                              <ExpandableText text={s.description} collapsedHeight={60} />
-                            </div>
-                          )}
+          <motion.div
+            initial={{ opacity: 0, transform: 'translateY(8px)' }}
+            animate={{ opacity: 1, transform: 'translateY(0px)' }}
+            transition={{ duration: 0.28, ease: [0.23, 1, 0.32, 1] }}
+            className="flex flex-col gap-5"
+          >
+            {grouped.map(([categoria, items]) => (
+              <div key={categoria} className="flex flex-col gap-2">
+                <span className="text-[11px] text-moca uppercase tracking-wider">{categoria}</span>
+                {items.map((s) => (
+                  <div
+                    key={s.id}
+                    className={`p-3.5 md:p-4 rounded-[1.25rem] bg-ivory border border-champagne/50 flex items-center gap-3.5 ${
+                      s.active ? '' : 'opacity-60'
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[15px] text-espresso truncate">{s.name}</span>
+                        {!s.active && (
+                          <span className="shrink-0 px-2 py-0.5 rounded-full bg-champagne/40 text-moca text-[10px] uppercase tracking-wider">
+                            Oculto
+                          </span>
+                        )}
+                      </div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 10, flexWrap: 'wrap' }}>
-                            <span className="chip chip--silver" style={{ fontSize: 11, padding: '3px 9px' }}>
-                              <Icon name="clock" size={11} /> {s.duration_min} min
-                            </span>
-                            <span className={`chip ${free ? 'chip--emerald' : 'chip--gold'}`} style={{ fontSize: 11, padding: '3px 9px' }}>
-                              {free ? 'Sin cargo' : fmtPrice(s.price)}
-                            </span>
-                            {!free && (
-                              <span className="chip" style={{ fontSize: 11, padding: '3px 9px' }}>
-                                {deposit > 0 ? `Seña ${fmtPrice(deposit)}` : 'Sin seña'}
-                              </span>
-                            )}
-                            {!s.professional_id && (
-                              <span className="chip chip--danger" style={{ fontSize: 11, padding: '3px 9px' }}>Sin asignar</span>
-                            )}
-                          </div>
-                        </div>
+                      {s.description && (
+                        <p className="text-[12px] text-moca leading-relaxed mt-1 line-clamp-2">
+                          {s.description}
+                        </p>
+                      )}
 
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
-                          <button className="iconbtn" title="Editar" style={sqBtn}
-                            onClick={() => setModal({ service: s })}>
-                            <Icon name="edit" size={15} color="var(--muted)" />
-                          </button>
-                          <button className="iconbtn" title={s.active ? 'Ocultar' : 'Mostrar'} style={sqBtn}
-                            disabled={busyId === s.id} onClick={() => toggleActive(s)}>
-                            <Icon name="power" size={15} color={s.active ? 'var(--emerald)' : 'var(--faint)'} />
-                          </button>
-                          <button className="iconbtn" title="Eliminar" style={sqBtn}
-                            onClick={() => setToDelete(s)}>
-                            <Icon name="trash" size={15} color="var(--danger)" />
-                          </button>
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded-full bg-porcelain text-moca">
+                          <Clock className="w-3 h-3" />
+                          {s.duration_min} min
+                        </span>
+                        <span className="text-[11px] px-2.5 py-1 rounded-full bg-espresso/10 text-espresso">
+                          {(s.price ?? 0) === 0 ? 'Sin cargo' : fmtPrice(s.price)}
+                        </span>
+                        {(s.deposit_amount ?? 0) > 0 && (
+                          <span className="text-[11px] text-moca">Seña {fmtPrice(s.deposit_amount)}</span>
+                        )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
 
-          {!loading && services.length > 0 && (
-            <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 'var(--r)', background: 'var(--surface-2)', border: '1px solid var(--line)' }}>
-              <Icon name="card" size={17} color="var(--muted)" />
-              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-                Para cobrar las señas online tenés que conectar tu cuenta de Mercado Pago.{' '}
-                <button onClick={() => router.push('/panel/pagos')}
-                  style={{ background: 'none', border: 'none', padding: 0, color: 'var(--emerald)', fontWeight: 600, cursor: 'pointer', fontFamily: 'var(--sans)', fontSize: 12.5 }}>
-                  Ir a Cobros
-                </button>
+                    <div className="flex gap-1.5 shrink-0">
+                      <button
+                        title={s.active ? 'Ocultar de la reserva online' : 'Mostrar en la reserva online'}
+                        disabled={busyId === s.id}
+                        onClick={() => toggleActive(s)}
+                        className="pressable-soft w-9 h-9 rounded-[0.7rem] border border-champagne/50 bg-porcelain hover:border-espresso/20 flex items-center justify-center cursor-pointer"
+                      >
+                        {s.active
+                          ? <Eye className="w-4 h-4 text-espresso" />
+                          : <EyeOff className="w-4 h-4 text-moca" />}
+                      </button>
+                      <button
+                        title="Editar"
+                        onClick={() => setModal({ service: s })}
+                        className="pressable-soft w-9 h-9 rounded-[0.7rem] border border-champagne/50 bg-porcelain hover:border-espresso/20 flex items-center justify-center cursor-pointer"
+                      >
+                        <Pencil className="w-4 h-4 text-espresso" />
+                      </button>
+                      <button
+                        title="Eliminar"
+                        onClick={() => setToDelete(s)}
+                        className="pressable-soft w-9 h-9 rounded-[0.7rem] border border-terracota/30 bg-terracota/5 hover:bg-terracota/10 flex items-center justify-center cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4 text-terracota" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </div>
-          )}
+            ))}
+          </motion.div>
         </div>
       </div>
 
@@ -253,15 +264,3 @@ export default function ServiciosPage() {
     </>
   );
 }
-
-const pillBase: React.CSSProperties = {
-  padding: '7px 16px', borderRadius: 99, fontFamily: 'var(--sans)', cursor: 'pointer', fontSize: 13,
-};
-const pillActive: React.CSSProperties = {
-  ...pillBase, border: 'none', background: 'var(--emerald)', color: '#fff', fontWeight: 600,
-};
-const pillIdle: React.CSSProperties = {
-  ...pillBase, border: '1.5px solid var(--line)', background: 'transparent', color: 'var(--muted)',
-};
-
-const sqBtn: React.CSSProperties = { width: 32, height: 32 };
