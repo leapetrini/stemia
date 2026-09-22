@@ -50,8 +50,11 @@ function fmtPrice(n: number) {
 
 // Resorte en vez de curva fija: entre cajas de tamaños distintos una bezier
 // fuerte arranca y frena de golpe, y se lee tosco.
+// bounce: 0 lo deja críticamente amortiguado — llega y se queda, sin sobrepasar
+// el destino. Con rebote, una tarjeta que crece mucho al desplegarse se veía
+// elástica. El resorte igual reparte la velocidad, así que no frena de golpe.
 const MORFEO = {
-  layout: { type: 'spring' as const, duration: 0.5, bounce: 0.12 },
+  layout: { type: 'spring' as const, duration: 0.62, bounce: 0 },
   opacity: { duration: 0.22 },
 };
 const SUAVE = { duration: 0.28, ease: [0.23, 1, 0.32, 1] as const };
@@ -403,7 +406,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
                   transition={MORFEO}
                   type="button"
                   onClick={() => (desplegar ? setExpandida(s.id) : pickService(s))}
-                  className="pressable w-full text-left p-4 md:p-5 rounded-[1.2rem] md:rounded-[1.5rem] bg-ivory hover:bg-porcelain border border-champagne/50 flex items-center gap-4 cursor-pointer"
+                  className="pressable w-full text-left p-4 md:p-5 rounded-[1.2rem] md:rounded-[1.5rem] bg-ivory hover:bg-porcelain border border-champagne/50 flex items-center gap-4 cursor-pointer overflow-hidden"
                 >
                   <span className="flex-1 min-w-0 block">
                     <span className="block text-[15px] md:text-[17px] text-espresso">{s.name}</span>
