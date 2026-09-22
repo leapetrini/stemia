@@ -23,7 +23,7 @@ export function Landing({ onLogin, onBook }: LandingProps) {
   useEffect(() => setMontado(true), []);
 
   return (
-    <div className="w-full h-screen flex items-center justify-center p-3 md:p-5 bg-ivory">
+    <div className="w-full h-dvh flex items-center justify-center p-3 md:p-5 bg-ivory">
       <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
         <video
           autoPlay

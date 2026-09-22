@@ -66,7 +66,7 @@ export default function PanelLayout({ children }: { children: React.ReactNode })
   })();
 
   return (
-    <div className="w-full h-screen flex items-center justify-center p-3 md:p-5 bg-ivory">
+    <div className="w-full h-dvh flex items-center justify-center p-3 md:p-5 bg-ivory">
       {/* El mismo contenedor redondeado del hero: es lo que los hace el mismo
           producto. min-w-0 para que nada de adentro lo estire. */}
       <section className="relative w-full min-w-0 max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex bg-porcelain">

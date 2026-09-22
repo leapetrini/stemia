@@ -629,7 +629,7 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
 // Marco de pantalla completa, con el mismo contenedor redondeado del hero.
 function Marco({ onClose, children }: { onClose: () => void; children: React.ReactNode }) {
   return (
-    <div className="fixed inset-0 z-50 w-full h-screen flex items-center justify-center p-3 md:p-5 bg-ivory">
+    <div className="fixed inset-0 z-50 w-full h-dvh flex items-center justify-center p-3 md:p-5 bg-ivory">
       <section className="relative w-full min-w-0 max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden bg-porcelain flex flex-col">
         <div className="flex items-start justify-between gap-4 px-6 md:px-10 pt-8 md:pt-10 pb-3 md:pb-4 shrink-0">
           <div className="flex flex-col min-w-0">
