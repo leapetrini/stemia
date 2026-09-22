@@ -1,24 +1,29 @@
 'use client';
 
-import { Icon } from '@/components/ui/Icon';
+import { motion } from 'motion/react';
+import { MessageCircle } from 'lucide-react';
 
 export default function WhatsAppPage() {
   return (
-    <div className="page scr-anim">
-      <div className="scrhead">
-        <div className="scrhead__row">
-          <h1 className="scrhead__title">WhatsApp</h1>
-        </div>
+    <div className="h-full flex flex-col">
+      <div className="px-5 md:px-8 pt-4 md:pt-8 pb-3 shrink-0">
+        <h1 className="text-2xl md:text-4xl text-espresso tracking-tight leading-tight">WhatsApp</h1>
       </div>
-      <div className="px" style={{ paddingTop: 60, paddingBottom: 24, textAlign: 'center' }}>
-        <div style={{ width: 72, height: 72, borderRadius: '50%', background: 'var(--gold-tint)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-          <Icon name="chat" size={32} color="var(--gold)" />
-        </div>
-        <div style={{ fontFamily: 'var(--serif)', fontSize: 26, color: 'var(--ink)', marginBottom: 10 }}>Próximamente</div>
-        <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.6, maxWidth: 260, margin: '0 auto' }}>
+
+      <motion.div
+        initial={{ opacity: 0, transform: 'translateY(10px)' }}
+        animate={{ opacity: 1, transform: 'translateY(0px)' }}
+        transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+        className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center pb-12"
+      >
+        <span className="w-16 h-16 rounded-full bg-espresso/8 flex items-center justify-center mb-1">
+          <MessageCircle className="w-7 h-7 text-espresso" />
+        </span>
+        <h2 className="text-xl md:text-2xl text-espresso tracking-tight">Próximamente</h2>
+        <p className="text-[14px] text-moca leading-relaxed max-w-xs">
           La integración con WhatsApp Business estará disponible en la próxima versión.
         </p>
-      </div>
+      </motion.div>
     </div>
   );
 }
