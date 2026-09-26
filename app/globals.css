@@ -355,29 +355,9 @@ textarea.input { resize: none; line-height: 1.5; }
 }
 .pressable:active { transform: scale(0.97); }
 
-/* El CTA de la esquina entra con demora pero se va rápido: si tarda en irse,
-   queda asomando debajo de lo que se abre encima. */
-.cta-corner {
-  transition:
-    opacity 500ms cubic-bezier(0.23, 1, 0.32, 1) 300ms,
-    translate 500ms cubic-bezier(0.23, 1, 0.32, 1) 300ms,
-    scale 160ms cubic-bezier(0.23, 1, 0.32, 1);
-}
-.cta-corner:active { scale: 0.97; }
-.cta-corner[data-state='oculto'] {
-  opacity: 0;
-  translate: 0 8px;
-  pointer-events: none;
-  transition: opacity 150ms ease-out, translate 150ms ease-out;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .pressable:active { transform: none; }
-  .cta-corner, .cta-corner[data-state='oculto'] {
-    transition: opacity 200ms ease-out;
-    translate: none;
-  }
-  .cta-corner:active { scale: 1; }
 }
 
 /* Spinner de espera. CSS y no JS: sigue girando parejo aunque el hilo

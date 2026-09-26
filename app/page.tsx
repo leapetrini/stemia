@@ -19,7 +19,6 @@ export default function Home() {
 
   return (
     <Landing
-      onLogin={() => window.location.href = '/panel'}
       onBook={() => setPhase('booking')}
     />
   );
