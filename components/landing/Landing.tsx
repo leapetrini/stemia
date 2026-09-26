@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
-import { ArrowUpRight, ChevronRight, Sparkles } from 'lucide-react';
+import { ArrowUpRight, ChevronRight } from 'lucide-react';
 
 interface LandingProps {
   onBook: () => void;
@@ -60,7 +60,14 @@ export function Landing({ onBook }: LandingProps) {
         <div className="relative z-10 w-full h-full flex flex-col items-center">
           <nav className="flex items-center justify-between py-6 px-6 md:px-10 w-full relative z-30">
             <div className="flex-1">
-              <span className="tracking-tighter text-xl text-espresso">Stemia</span>
+              {/* El logotipo de la marca. Viene blanco sobre negro, así que se
+                  pasó a espresso sobre transparente para que funcione sobre el
+                  video claro. */}
+              <img
+                src="/logo-stemia.png"
+                alt="Stemia"
+                className="h-6 md:h-7 w-auto"
+              />
             </div>
 
             <ul className="hidden md:flex items-center gap-8 text-espresso text-sm list-none m-0 p-0">
@@ -83,17 +90,7 @@ export function Landing({ onBook }: LandingProps) {
             <div className="flex-1" aria-hidden />
           </nav>
 
-          <div className="w-full flex flex-col items-center pt-8 px-6 text-center max-w-4xl">
-            <motion.div
-              initial={{ opacity: 0, transform: 'translateY(20px)' }}
-              animate={{ opacity: 1, transform: 'translateY(0px)' }}
-              transition={{ duration: 0.6, ease: [0.23, 1, 0.32, 1] }}
-              className="flex items-center gap-2 px-4 py-2 rounded-full bg-ivory/70 backdrop-blur-md border border-champagne/40 mx-auto mb-3 w-fit"
-            >
-              <Sparkles className="w-4 h-4 text-espresso" />
-              <span className="text-[14px] text-espresso">Medicina Estética</span>
-            </motion.div>
-
+          <div className="w-full flex flex-col items-center pt-10 md:pt-14 px-6 text-center max-w-4xl">
             <motion.h1
               initial={{ opacity: 0, transform: 'scale(0.98)' }}
               animate={{ opacity: 1, transform: 'scale(1)' }}
@@ -137,6 +134,18 @@ export function Landing({ onBook }: LandingProps) {
               </span>
             </motion.div>
           </div>
+
+          {/* Pie: al fondo del hero, sin empujar nada. */}
+          <motion.footer
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, delay: 0.9 }}
+            className="mt-auto w-full px-6 pb-5 md:pb-7 text-center"
+          >
+            <span className="text-[11px] md:text-[12px] text-moca tracking-wide">
+              © {new Date().getFullYear()} Stemia · Medicina estética · Neuquén Capital
+            </span>
+          </motion.footer>
         </div>
       </section>
     </div>
