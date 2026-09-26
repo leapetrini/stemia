@@ -140,10 +140,23 @@ export function Landing({ onBook }: LandingProps) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.9 }}
-            className="mt-auto w-full px-6 pb-5 md:pb-7 text-center"
+            className="mt-auto w-full px-6 pb-5 md:pb-7 flex flex-col items-center gap-2.5"
           >
+            {/* La palabra va como imagen, porque la tipografía es la de la
+                marca. La bajada va como texto: dentro del PNG quedaba en 7px y
+                no se leía, y como texto es nítida a cualquier tamaño. */}
+            <div className="flex flex-col items-center gap-1">
+              <img
+                src="/logo-stemia.png"
+                alt="Stemia"
+                className="h-7 md:h-8 w-auto"
+              />
+              <span className="text-[10px] md:text-[11px] text-moca tracking-[0.22em] uppercase">
+                by Dra. Valentina Calvo
+              </span>
+            </div>
             <span className="text-[11px] md:text-[12px] text-moca tracking-wide">
-              © {new Date().getFullYear()} Stemia · Medicina estética · Neuquén Capital
+              © {new Date().getFullYear()} Medicina estética · Neuquén Capital
             </span>
           </motion.footer>
         </div>
