@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { ArrowUpRight, ChevronRight } from 'lucide-react';
 
@@ -17,18 +17,31 @@ const MENU = [
 
 export function Landing({ onBook }: LandingProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  // El video recién se muestra cuando está reproduciéndose de verdad. Hasta
+  // entonces (y para siempre, si el navegador no lo deja) se ve la imagen fija.
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [videoBlocked, setVideoBlocked] = useState(false);
 
   // El video se puede quedar pausado solo: al volver de otra pestaña, al
   // restaurar la página desde el caché del navegador, o porque el celular
   // bloqueó el autoplay. Como está en loop y sin sonido, reanudarlo no
-  // molesta a nadie. El catch vacío es a propósito: si el navegador se niega
-  // (por ejemplo en modo de bajo consumo), queda el poster y listo.
+  // molesta a nadie.
+  //
+  // Si el navegador se niega (modo de bajo consumo del iPhone, o navegadores
+  // internos como el de Gmail o Instagram), el video se saca de la página:
+  // iOS dibuja su reproductor nativo (play, barra de tiempo y un velo gris)
+  // por encima de todo el inicio, y con la imagen fija se ve bien.
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
 
     const reanudar = () => {
-      if (v.paused) v.play().catch(() => {});
+      if (!v.isConnected || !v.paused) return;
+      // NotAllowedError = el navegador no deja reproducir sin que la persona
+      // toque. Cualquier otro error (p. ej. una carga cortada) se ignora.
+      v.play().catch((err: unknown) => {
+        if (err instanceof DOMException && err.name === 'NotAllowedError') setVideoBlocked(true);
+      });
     };
 
     reanudar();
@@ -46,16 +59,33 @@ export function Landing({ onBook }: LandingProps) {
   return (
     <div className="w-full h-dvh flex items-center justify-center p-3 md:p-5 bg-ivory">
       <section className="relative w-full max-w-[1536px] h-full rounded-[1.5rem] md:rounded-[3rem] overflow-hidden flex flex-col items-center">
-        <video
-          ref={videoRef}
-          autoPlay
-          muted
-          loop
-          playsInline
-          poster="/hero-poster.jpg"
-          src="/hero-pearl.mp4"
+        {/* eslint-disable-next-line @next/next/no-img-element -- fondo decorativo, ya optimizado (8 KB) */}
+        <img
+          src="/hero-poster.jpg"
+          alt=""
+          aria-hidden
           className="absolute inset-0 w-full h-full object-cover object-[65%] lg:object-center z-0"
         />
+
+        {!videoBlocked && (
+          <video
+            ref={videoRef}
+            autoPlay
+            muted
+            loop
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback
+            controls={false}
+            tabIndex={-1}
+            aria-hidden
+            src="/hero-pearl.mp4"
+            onPlaying={() => setVideoPlaying(true)}
+            className={`hero-video absolute inset-0 w-full h-full object-cover object-[65%] lg:object-center z-0 pointer-events-none transition-opacity duration-700 ${
+              videoPlaying ? 'opacity-100' : 'opacity-0'
+            }`}
+          />
+        )}
 
         <div className="relative z-10 w-full h-full flex flex-col items-center">
           <nav className="flex items-center justify-between py-6 px-6 md:px-10 w-full relative z-30">

@@ -377,3 +377,13 @@ textarea.input { resize: none; line-height: 1.5; }
   .spinner { animation-duration: 1400ms; }
   .check-draw { animation: none; stroke-dashoffset: 0; }
 }
+
+/* Video de fondo del inicio: que iOS nunca dibuje su reproductor nativo
+   (botón de play, barra de tiempo, velo gris) por encima del contenido. */
+.hero-video::-webkit-media-controls,
+.hero-video::-webkit-media-controls-panel,
+.hero-video::-webkit-media-controls-overlay-play-button,
+.hero-video::-webkit-media-controls-start-playback-button {
+  display: none !important;
+  -webkit-appearance: none;
+}
