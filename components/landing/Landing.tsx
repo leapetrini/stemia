@@ -15,44 +15,62 @@ const MENU = [
   { label: 'Contacto', dropdown: false },
 ];
 
+// Si el navegador bloqueó el video, se recuerda por toda la visita, aunque el
+// inicio se desarme y se vuelva a armar (ir a "Reservar" y volver). Al recargar
+// se pierde, pero no hace falta: al recargar el navegador también se olvida de
+// que la persona tocó la pantalla, y vuelve a bloquear el video de entrada.
+// Arranca en false también en el servidor: el primer render coincide.
+let videoBloqueadoEnEstaVisita = false;
+
 export function Landing({ onBook }: LandingProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   // El video recién se muestra cuando está reproduciéndose de verdad. Hasta
   // entonces (y para siempre, si el navegador no lo deja) se ve la imagen fija.
   const [videoPlaying, setVideoPlaying] = useState(false);
-  const [videoBlocked, setVideoBlocked] = useState(false);
+  const [videoBlocked, setVideoBlocked] = useState(videoBloqueadoEnEstaVisita);
 
-  // El video se puede quedar pausado solo: al volver de otra pestaña, al
-  // restaurar la página desde el caché del navegador, o porque el celular
-  // bloqueó el autoplay. Como está en loop y sin sonido, reanudarlo no
-  // molesta a nadie.
+  // Si el navegador se niega a reproducir (modo de bajo consumo del iPhone, o
+  // los navegadores internos de Gmail, TikTok, Instagram), el video se saca de
+  // la página: iOS dibuja su reproductor nativo (play, barra de tiempo y un
+  // velo gris) por encima de todo el inicio, y con la imagen fija se ve bien.
   //
-  // Si el navegador se niega (modo de bajo consumo del iPhone, o navegadores
-  // internos como el de Gmail o Instagram), el video se saca de la página:
-  // iOS dibuja su reproductor nativo (play, barra de tiempo y un velo gris)
-  // por encima de todo el inicio, y con la imagen fija se ve bien.
+  // Y no se vuelve a intentar en toda la visita: al ir a "Reservar" y volver,
+  // el inicio se arma de nuevo, y como la persona ya tocó la pantalla esos
+  // navegadores sí dejan arrancar el video... pero con el reproductor nativo
+  // encima. Por lo mismo no se reintenta al tocar la pantalla.
   useEffect(() => {
+    // Con el video ya bloqueado en esta visita ni se dibuja: no hay ref
     const v = videoRef.current;
     if (!v) return;
 
+    const bloquear = () => {
+      videoBloqueadoEnEstaVisita = true;
+      v.pause();
+      setVideoBlocked(true);
+    };
+
+    // El video se puede quedar pausado solo: al volver de otra pestaña o al
+    // restaurar la página desde el caché del navegador. Está en loop y sin
+    // sonido, así que reanudarlo no molesta a nadie.
     const reanudar = () => {
       if (!v.isConnected || !v.paused) return;
       // NotAllowedError = el navegador no deja reproducir sin que la persona
       // toque. Cualquier otro error (p. ej. una carga cortada) se ignora.
       v.play().catch((err: unknown) => {
-        if (err instanceof DOMException && err.name === 'NotAllowedError') setVideoBlocked(true);
+        if (err instanceof DOMException && err.name === 'NotAllowedError') bloquear();
       });
     };
 
     reanudar();
     document.addEventListener('visibilitychange', reanudar);
     window.addEventListener('pageshow', reanudar);
-    window.addEventListener('pointerdown', reanudar, { once: true });
+    // Navegadores que no reproducen dentro de la página: lo abren en pantalla completa
+    v.addEventListener('webkitbeginfullscreen', bloquear);
 
     return () => {
       document.removeEventListener('visibilitychange', reanudar);
       window.removeEventListener('pageshow', reanudar);
-      window.removeEventListener('pointerdown', reanudar);
+      v.removeEventListener('webkitbeginfullscreen', bloquear);
     };
   }, []);
 
@@ -70,7 +88,6 @@ export function Landing({ onBook }: LandingProps) {
         {!videoBlocked && (
           <video
             ref={videoRef}
-            autoPlay
             muted
             loop
             playsInline
