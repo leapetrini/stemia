@@ -1,6 +1,7 @@
 // Email de confirmación de turno. Usado por /api/booking (servicios sin cargo)
 // y por el webhook de Mercado Pago (turnos confirmados al aprobarse la seña).
 import nodemailer from 'nodemailer';
+import { waNumber } from './phone';
 
 const DAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MONTH_NAMES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -57,8 +58,8 @@ export async function sendNewBookingNotificationEmail(input: AdminNotifyInput) {
   const time = input.time.slice(0, 5);
   const phone = input.patientPhone?.trim() || '—';
   const service = input.serviceName?.trim() || 'Consulta';
-  // Link a wa.me con el teléfono normalizado (solo dígitos), para escribirle directo.
-  const waDigits = (input.patientPhone ?? '').replace(/\D/g, '');
+  // Link a wa.me en formato internacional (549…), para escribirle directo.
+  const waDigits = waNumber(input.patientPhone);
 
   await transporter.sendMail({
     from: `"Stemia · Reservas" <${process.env.GMAIL_USER}>`,

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowUpRight, Check, ChevronRight, Clock, LoaderCircle, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { generateSlots, type ScheduleSettings } from '@/lib/slots';
+import { telefonoIncompleto } from '@/lib/phone';
 import type { Professional, Service } from '@/lib/types';
 
 const DAY_NAMES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
@@ -88,6 +89,8 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  // El aviso de número incompleto aparece recién al salir del campo
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [sending, setSending] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [calendarioAbierto, setCalendarioAbierto] = useState(true);
@@ -623,9 +626,17 @@ export function BookingFlow({ onClose, onSuccess }: BookingFlowProps) {
               type="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              onBlur={() => setPhoneTouched(true)}
               placeholder="Teléfono"
               className="w-full px-5 py-3 rounded-full bg-ivory border border-champagne/50 text-[14px] text-espresso placeholder:text-moca outline-none focus:border-espresso/30"
             />
+            {/* Solo avisa, no bloquea: puede ser un número que no conocemos */}
+            {phoneTouched && telefonoIncompleto(phone) && (
+              <p className="text-[12.5px] text-moca leading-relaxed px-1 -mt-1">
+                Revisá el número: parece que le falta algún dígito. Poné el código de área y el
+                número, por ejemplo 299 412 3456.
+              </p>
+            )}
 
             {bookingError && (
               <p className="text-[13px] text-terracota leading-relaxed px-1">{bookingError}</p>
